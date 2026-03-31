@@ -58,10 +58,10 @@ export async function POST() {
         error: notFound
           ? "Профиль не найден"
           : fnMissing
-            ? "Функция daily reward не найдена в БД. Примени актуальный schema.sql."
+            ? "Функция ежедневной награды не найдена в БД. Примени актуальный schema.sql."
             : permissionError
-              ? "Недостаточно прав на выполнение daily reward."
-              : dbMessage || "Не удалось получить daily reward",
+              ? "Недостаточно прав на получение ежедневной награды."
+              : dbMessage || "Не удалось получить ежедневную награду",
       },
       { status: notFound ? 404 : fnMissing ? 501 : permissionError ? 403 : 500 },
     );

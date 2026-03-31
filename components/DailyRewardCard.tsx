@@ -35,6 +35,17 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
   const [error, setError] = useState<string | null>(null);
 
   const capReached = useMemo(() => state.nextReward >= 50, [state.nextReward]);
+  const rewardDay = useMemo(() => {
+    if (!state.canClaim) {
+      return Math.max(state.streak, 1);
+    }
+
+    if (state.streakWillReset) {
+      return 1;
+    }
+
+    return Math.max(state.streak + 1, 1);
+  }, [state.canClaim, state.streak, state.streakWillReset]);
 
   const handleClaim = async () => {
     if (!state.canClaim || loading) return;
@@ -58,7 +69,7 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
       };
 
       if (!response.ok) {
-        setError(data.error || "Не удалось получить daily reward");
+        setError(data.error || "Не удалось получить ежедневную награду");
         return;
       }
 
@@ -98,11 +109,12 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
     <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Daily reward</h2>
-          <p className="text-xs text-white/60 mt-1">Текущая серия: {state.streak} дн.</p>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Ежедневная награда</h2>
+          <p className="text-xs text-white/60 mt-1">Ежедневная награда: день {rewardDay}</p>
+          <p className="text-[11px] text-white/45 mt-1 uppercase tracking-[0.08em]">Текущая серия: {state.streak} дн.</p>
         </div>
         <div className="text-right">
-          <p className="text-[10px] uppercase tracking-[0.12em] text-white/40">Следующий бонус</p>
+          <p className="text-[10px] uppercase tracking-[0.12em] text-white/40">Ежедневный бонус</p>
           <p className="text-sm font-black text-neon-green">
             +{state.nextReward} {capReached ? "😎" : ""}
           </p>
@@ -113,12 +125,12 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
         <p className="text-[11px] text-white/75">
           {state.canClaim
             ? `Доступно сейчас: +${state.rewardToday} ауры`
-            : `Следующий claim после ${formatDate(state.availableAt)} (UTC+0)`}
+            : `Следующая награда после ${formatDate(state.availableAt)} (UTC+0)`}
         </p>
 
         {state.streakWillReset && state.canClaim && (
           <p className="mt-2 text-[10px] text-neon-pink/90 uppercase tracking-[0.08em]">
-            Серия была прервана, после claim начнется заново.
+            Серия была прервана, после получения начнется заново.
           </p>
         )}
 
@@ -134,9 +146,9 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
           type="button"
           onClick={handleClaim}
           disabled={!state.canClaim || loading}
-          className="mt-4 w-full rounded-xl border border-neon-green/40 bg-neon-green/10 py-3 text-[10px] font-black uppercase tracking-[0.15em] text-neon-green transition-all disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-4 w-full rounded-2xl border-2 border-neon-green/50 bg-gradient-to-r from-neon-green/20 via-neon-green/10 to-neon-purple/15 py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-neon-green shadow-[0_0_20px_rgba(57,255,20,0.18)] transition-all hover:-translate-y-[1px] hover:border-neon-green/70 hover:from-neon-green/30 hover:to-neon-purple/25 hover:shadow-[0_0_28px_rgba(57,255,20,0.26)] active:scale-[0.98] disabled:cursor-not-allowed disabled:border-white/20 disabled:bg-white/5 disabled:text-white/45 disabled:shadow-none disabled:translate-y-0"
         >
-          {loading ? "Получаем..." : state.canClaim ? `Забрать +${state.rewardToday}` : "Уже получено сегодня"}
+          {loading ? "Заряжаем награду..." : state.canClaim ? `Забрать +${state.rewardToday} ауры` : "Награда уже получена"}
         </button>
       </div>
     </section>

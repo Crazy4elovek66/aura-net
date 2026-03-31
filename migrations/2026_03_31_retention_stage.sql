@@ -80,7 +80,7 @@ begin
     p_profile_id,
     v_reward,
     'daily_reward',
-    format('Daily reward: day %s', v_streak),
+    format('Ежедневная награда: день %s', v_streak),
     jsonb_build_object(
       'source', 'daily_reward',
       'streak', v_streak,

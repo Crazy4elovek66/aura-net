@@ -32,7 +32,7 @@ export default function LeaderboardPreview({
 }: LeaderboardPreviewProps) {
   return (
     <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
-      <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Leaderboard Preview</h2>
+      <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Основные лидеры</h2>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div>
