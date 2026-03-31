@@ -73,7 +73,7 @@ begin
       daily_streak = v_streak,
       last_reward_at = v_now
   where id = p_profile_id
-  returning last_reward_at into v_previous_reward_at;
+  returning public.profiles.last_reward_at into v_previous_reward_at;
 
   insert into public.transactions (user_id, amount, type, description, metadata)
   values (
