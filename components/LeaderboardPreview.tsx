@@ -22,6 +22,16 @@ interface LeaderboardPreviewProps {
   subtitle?: string;
 }
 
+const UI_TEXT = {
+  titleLanding: "\u041b\u0438\u0434\u0435\u0440\u044b \u0430\u0443\u0440\u044b",
+  titleProfile: "\u041e\u0441\u043d\u043e\u0432\u043d\u044b\u0435 \u043b\u0438\u0434\u0435\u0440\u044b",
+  subtitleLanding:
+    "\u041a\u043e\u0433\u043e \u0441\u0435\u0439\u0447\u0430\u0441 \u043e\u0431\u0441\u0443\u0436\u0434\u0430\u044e\u0442 \u0438 \u043a\u0442\u043e \u0440\u0430\u0441\u0442\u0435\u0442 \u0431\u044b\u0441\u0442\u0440\u0435\u0435 \u0432\u0441\u0435\u0445.",
+  auraTop: "\u0422\u043e\u043f \u043f\u043e \u043e\u0431\u0449\u0435\u0439 \u0430\u0443\u0440\u0435",
+  growthTop: "\u0420\u043e\u0441\u0442 \u0437\u0430 7 \u0434\u043d\u0435\u0439",
+  growthEmpty: "\u041f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445 \u043f\u043e \u0440\u043e\u0441\u0442\u0443.",
+};
+
 function rowClass(isCurrentUser: boolean, isLanding: boolean) {
   if (isCurrentUser) {
     return isLanding
@@ -42,8 +52,8 @@ export default function LeaderboardPreview({
 }: LeaderboardPreviewProps) {
   const isLanding = variant === "landing";
 
-  const resolvedTitle = title ?? (isLanding ? "Лидеры ауры" : "Основные лидеры");
-  const resolvedSubtitle = subtitle ?? (isLanding ? "Кого сейчас обсуждают и кто растет быстрее всех." : "");
+  const resolvedTitle = title ?? (isLanding ? UI_TEXT.titleLanding : UI_TEXT.titleProfile);
+  const resolvedSubtitle = subtitle ?? (isLanding ? UI_TEXT.subtitleLanding : "");
 
   return (
     <section
@@ -70,7 +80,7 @@ export default function LeaderboardPreview({
 
       <div className={isLanding ? "grid gap-4 md:grid-cols-2" : "grid gap-4 md:grid-cols-2"}>
         <div className={isLanding ? "rounded-2xl border border-white/10 bg-black/25 p-4" : ""}>
-          <p className="mb-2 text-[10px] uppercase tracking-[0.12em] text-neon-green/90">Топ по общей ауре</p>
+          <p className="mb-2 text-[10px] uppercase tracking-[0.12em] text-neon-green/90">{UI_TEXT.auraTop}</p>
           <div className="space-y-2">
             {auraLeaders.map((leader, index) => (
               <div
@@ -91,7 +101,7 @@ export default function LeaderboardPreview({
         </div>
 
         <div className={isLanding ? "rounded-2xl border border-white/10 bg-black/25 p-4" : ""}>
-          <p className="mb-2 text-[10px] uppercase tracking-[0.12em] text-neon-pink/90">Рост за 7 дней</p>
+          <p className="mb-2 text-[10px] uppercase tracking-[0.12em] text-neon-pink/90">{UI_TEXT.growthTop}</p>
           <div className="space-y-2">
             {growthLeaders.length ? (
               growthLeaders.map((leader, index) => (
@@ -111,7 +121,7 @@ export default function LeaderboardPreview({
               ))
             ) : (
               <p className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] text-white/55">
-                Пока нет данных по росту.
+                {UI_TEXT.growthEmpty}
               </p>
             )}
           </div>

@@ -168,6 +168,15 @@ const EMPTY_LEADERBOARD: LandingLeaderboardPayload = {
   growthLeaders: [],
 };
 
+const LANDING_LB_TEXT = {
+  headingMain: "\u0413\u043b\u0430\u0432\u043d\u044b\u0435",
+  headingAccent: "\u043b\u0438\u0434\u0435\u0440\u044b",
+  subtitle:
+    "\u041a\u0442\u043e \u0434\u0435\u0440\u0436\u0438\u0442 \u0432\u0435\u0440\u0445 \u043f\u043e \u043e\u0431\u0449\u0435\u0439 \u0430\u0443\u0440\u0435 \u0438 \u043a\u0442\u043e \u0443\u0441\u043a\u043e\u0440\u044f\u0435\u0442\u0441\u044f \u0431\u044b\u0441\u0442\u0440\u0435\u0435 \u0432\u0441\u0435\u0445 \u0437\u0430 \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u044e\u044e \u043d\u0435\u0434\u0435\u043b\u044e.",
+  title: "\u041e\u0441\u043d\u043e\u0432\u043d\u044b\u0435 \u043b\u0438\u0434\u0435\u0440\u044b",
+  teaserSubtitle: "\u0422\u043e\u043f \u043f\u043e \u043e\u0431\u0449\u0435\u0439 \u0430\u0443\u0440\u0435 \u0438 \u043f\u043e \u043f\u0440\u0438\u0440\u043e\u0441\u0442\u0443 \u0437\u0430 7 \u0434\u043d\u0435\u0439.",
+};
+
 export default function LandingPage() {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -553,13 +562,13 @@ function LandingContent({
           viewport={{ margin: "-100px" }}
           className="max-w-5xl mx-auto"
         >
-                    <motion.div variants={itemVariants} className="text-center mb-10">
+          <motion.div variants={itemVariants} className="text-center mb-10">
             <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-              Главные{" "}
-              <span className="text-neon-green text-glow-green">лидеры</span>
+              {LANDING_LB_TEXT.headingMain}{" "}
+              <span className="text-neon-green text-glow-green">{LANDING_LB_TEXT.headingAccent}</span>
             </h2>
             <p className="text-muted max-w-2xl mx-auto text-sm">
-              Кто держит верх по общей ауре и кто ускоряется быстрее всех за последнюю неделю.
+              {LANDING_LB_TEXT.subtitle}
             </p>
           </motion.div>
 
@@ -588,8 +597,8 @@ function LandingContent({
               ) : (
                 <LeaderboardPreview
                   variant="landing"
-                  title="Основные лидеры"
-                  subtitle="Топ по общей ауре и по приросту за 7 дней."
+                  title={LANDING_LB_TEXT.title}
+                  subtitle={LANDING_LB_TEXT.teaserSubtitle}
                   auraLeaders={leaderboardData.auraLeaders}
                   growthLeaders={leaderboardData.growthLeaders}
                   currentUserId={user?.id || ""}
