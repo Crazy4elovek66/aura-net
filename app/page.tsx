@@ -10,75 +10,75 @@ import Link from "next/link";
 const DEMO_USERS = [
   {
     username: "npc_mike",
-    displayName: "РњРёС€Р°",
+    displayName: "Миша",
     avatarUrl: null,
     auraPoints: 234,
     totalVotesUp: 44,
     totalVotesDown: 91,
-    status: "РўРёРїРёС‡РЅС‹Р№ РќРџРЎ. РўРІРѕР№ РІРєР»Р°Рґ РІ СЌРєРѕРЅРѕРјРёРєСѓ Р°СѓСЂС‹ вЂ” СЌС‚Рѕ РїСЂРѕСЃС‚Рѕ СЃСѓС‰РµСЃС‚РІРѕРІР°С‚СЊ.",
+    status: "Типичный НПС. Твой вклад в экономику ауры — это просто существовать.",
   },
   {
     username: "vibe_check_alex",
-    displayName: "РђР»РµРєСЃ",
+    displayName: "Алекс",
     avatarUrl: null,
     auraPoints: 1250,
     totalVotesUp: 389,
     totalVotesDown: 167,
-    status: "РЈСЂРѕРІРµРЅСЊ РіРµСЂРѕСЏ СЂР°Р·Р±Р»РѕРєРёСЂРѕРІР°РЅ. РўРІРѕР№ РІР°Р№Р± вЂ” СЌС‚Рѕ С‡РёСЃС‚С‹Р№ РјРµР№РЅ-РєСЌСЂР°РєС‚РµСЂ РјРѕРјРµРЅС‚.",
+    status: "Уровень героя разблокирован. Твой вайб — это чистый мейн-кэрактер момент.",
   },
   {
     username: "dima_vibes",
-    displayName: "Р”РјРёС‚СЂРёР№",
+    displayName: "Дмитрий",
     avatarUrl: null,
     auraPoints: 4120,
     totalVotesUp: 852,
     totalVotesDown: 42,
-    status: "РўРѕС‚ СЃР°РјС‹Р№, Рѕ РєРѕРј РІСЃРµ С€РµРїС‡СѓС‚СЃСЏ РІ РєРѕСЂРёРґРѕСЂР°С…. РРЅРґРёРіРѕ-РІР°Р№Р±.",
+    status: "Тот самый, о ком все шепчутся в коридорах. Индиго-вайб.",
   },
   {
     username: "sigma_sarah",
-    displayName: "РЎР°СЂР°",
+    displayName: "Сара",
     avatarUrl: null,
     auraPoints: 5247,
     totalVotesUp: 642,
     totalVotesDown: 12,
-    status: "РђР±СЃРѕР»СЋС‚РЅР°СЏ СЃРёРіРјР°. РўРІРѕРµ РїСЂРёСЃСѓС‚СЃС‚РІРёРµ Р±СѓРєРІР°Р»СЊРЅРѕ РїРѕРІС‹С€Р°РµС‚ Р¤РџРЎ Сѓ РѕРєСЂСѓР¶Р°СЋС‰РёС….",
+    status: "Абсолютная сигма. Твое присутствие буквально повышает ФПС у окружающих.",
   },
 ];
 
 const TIER_DATA = [
   {
     range: "0 - 500",
-    name: "РќРџРЎ",
-    emoji: "рџ¤Ў",
-    desc: "РЎРµСЂС‹Р№ Рё Р·Р°Р»РѕС‡РµРЅРЅС‹Р№. Р’С‹ РЅРµ РёРјРµРµС‚Рµ РїСЂР°РІР° РіРѕР»РѕСЃР° РІ СЌС‚РѕРј РјРёСЂРµ.",
+    name: "НПС",
+    emoji: "🤡",
+    desc: "Серый и залоченный. Вы не имеете права голоса в этом мире.",
     color: "text-muted",
     border: "border-muted/30",
     bg: "bg-muted/5",
   },
   {
     range: "501 - 2000",
-    name: "Р“Р•Р РћР™",
-    emoji: "рџ¤ ",
-    desc: "Р Р°Р·Р±Р»РѕРєРёСЂРѕРІР°РЅ Рё СЃРёСЏРµС‚. РўРІРѕСЏ Р°СѓСЂР° РЅР°С‡РёРЅР°РµС‚ РїСѓР»СЊСЃРёСЂРѕРІР°С‚СЊ.",
+    name: "ГЕРОЙ",
+    emoji: "🤠",
+    desc: "Разблокирован и сияет. Твоя аура начинает пульсировать.",
     color: "text-neon-purple",
     border: "border-neon-purple/30",
     bg: "bg-neon-purple/5",
   },
   {
     range: "2001 - 5000",
-    name: "РўРћРў РЎРђРњР«Р™",
-    emoji: "рџЏ",
-    desc: "Р­Р»РёС‚РЅС‹Р№ СЃС‚Р°С‚СѓСЃ. Р”РѕСЃС‚СѓРї Рє Р–СѓСЂРЅР°Р»Сѓ РЎРіРѕСЂР°РЅРёСЏ Рё РёРЅРґРёРіРѕРІРѕРµ СЃРІРµС‡РµРЅРёРµ.",
+    name: "ТОТ САМЫЙ",
+    emoji: "😏",
+    desc: "Элитный статус. Доступ к Журналу Сгорания и индиговое свечение.",
     color: "text-indigo-400",
     border: "border-indigo-400/30",
     bg: "bg-indigo-400/5",
   },
   {
     range: "5001+",
-    name: "РЎРР“РњРђ",
-    emoji: "рџ‘‘",
-    desc: "Р›РµРіРµРЅРґР°. РўС‹ Р Р•РЎРўР¬ Р°Р»РіРѕСЂРёС‚Рј СЌС‚РѕРіРѕ РјРёСЂР°. Р—РѕР»РѕС‚РѕРµ СЃРёСЏРЅРёРµ.",
+    name: "СИГМА",
+    emoji: "👑",
+    desc: "Легенда. Ты И ЕСТЬ алгоритм этого мира. Золотое сияние.",
     color: "text-yellow-400",
     border: "border-yellow-400/30",
     bg: "bg-yellow-400/5",
@@ -203,7 +203,7 @@ export default function LandingPage() {
           });
         }
       } catch {
-        // Р”Р»СЏ Р»РµРЅРґРёРЅРіР° РјРѕР»С‡Р° РѕСЃС‚Р°РІР»СЏРµРј РїСѓСЃС‚РѕР№ teaser, РµСЃР»Рё API РЅРµРґРѕСЃС‚СѓРїРµРЅ.
+        // Для лендинга молча оставляем пустой teaser, если API недоступен.
       } finally {
         if (isActive) {
           setLeaderboardLoading(false);
@@ -276,7 +276,7 @@ function LandingContent({
 
   return (
     <div className="relative overflow-hidden animate-in fade-in duration-700">
-      {/* РќР°РІРёРіР°С†РёСЏ */}
+      {/* Навигация */}
       <nav className="fixed top-0 left-0 right-0 z-[150] p-6 flex justify-between items-center bg-background/50 backdrop-blur-md border-b border-card-border">
         <Link href="/" className="text-xl font-bold tracking-tighter">
           <span className="text-neon-purple">AURA</span>
@@ -288,20 +288,20 @@ function LandingContent({
               href="/profile"
               className="px-4 py-2 rounded-lg border border-card-border hover:border-neon-purple transition-all text-sm font-medium"
             >
-              РџСЂРѕС„РёР»СЊ
+              Профиль
             </Link>
           ) : (
             <Link
               href="/login"
               className="px-4 py-2 rounded-lg border border-neon-purple/50 bg-neon-purple/10 text-neon-purple hover:bg-neon-purple/20 transition-all text-sm font-medium"
             >
-              Р’РѕР№С‚Рё
+              Войти
             </Link>
           )}
         </div>
       </nav>
 
-      {/* Р¤РѕРЅРѕРІС‹Рµ СЌС„С„РµРєС‚С‹ */}
+      {/* Фоновые эффекты */}
       <div className="fixed inset-0 bg-grid pointer-events-none" />
       <FloatingOrb delay={0} size={400} color="rgba(180,74,255,0.3)" x="10%" y="20%" />
       <FloatingOrb delay={2} size={300} color="rgba(57,255,20,0.2)" x="70%" y="60%" />
@@ -313,7 +313,7 @@ function LandingContent({
         style={{ opacity: heroOpacity, scale: heroScale }}
         className="relative min-h-screen flex flex-col items-center justify-center px-4 text-center"
       >
-        {/* Р‘РµР№РґР¶ */}
+        {/* Бейдж */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -326,11 +326,11 @@ function LandingContent({
               transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
               className="w-2 h-2 rounded-full bg-neon-green shadow-[0_0_8px_rgba(57,255,20,0.8)]"
             />
-            Р‘РµС‚Р° вЂ” Р·Р°С€С‘Р» РїРµСЂРІС‹Рј = РїРѕР»СѓС‡РёР» Р±РѕР»СЊС€Рµ
+            Бета — зашёл первым = получил больше
           </span>
         </motion.div>
 
-        {/* Р—Р°РіРѕР»РѕРІРѕРє */}
+        {/* Заголовок */}
         <motion.h1
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -341,16 +341,16 @@ function LandingContent({
           <span className="text-white/70">.NET</span>
         </motion.h1>
 
-        {/* РџРѕРґР·Р°РіРѕР»РѕРІРѕРє */}
+        {/* Подзаголовок */}
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7, duration: 0.8 }}
           className="text-lg sm:text-xl text-muted max-w-md mb-4"
         >
-          РЎРѕС†РёР°Р»СЊРЅР°СЏ РёРіСЂР° СЃС‚Р°С‚СѓСЃР°.{" "}
+          Социальная игра статуса.{" "}
           <span className="text-foreground font-semibold">
-            РџСѓСЃС‚СЊ РґСЂСѓР·СЊСЏ РѕС†РµРЅСЏС‚ С‚РІРѕР№ РІР°Р№Р±.
+            Пусть друзья оценят твой вайб.
           </span>
         </motion.p>
 
@@ -360,10 +360,10 @@ function LandingContent({
           transition={{ delay: 0.9 }}
           className="text-sm text-muted/60 mb-10"
         >
-          РќРџРЎ рџ‘» в†’ Р“РµСЂРѕР№ рџ’њ в†’ РЎРёРіРјР° вљЎ
+          НПС 👻 → Герой 💜 → Сигма ⚡
         </motion.p>
 
-        {/* РљРЅРѕРїРєРё РґРµР№СЃС‚РІРёР№ */}
+        {/* Кнопки действий */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -377,7 +377,7 @@ function LandingContent({
             transition={{ type: "spring", stiffness: 400, damping: 10 }}
             className="px-8 py-4 rounded-xl font-bold text-lg bg-neon-purple text-white border-2 border-neon-purple neon-glow-purple cursor-pointer transition-colors w-full sm:w-auto"
           >
-            вљЎ РЈР·РЅР°Р№ СЃРІРѕСЋ Р°СѓСЂСѓ
+            ⚡ Узнай свою ауру
           </motion.button>
           </Link>
           <motion.button
@@ -387,12 +387,12 @@ function LandingContent({
             className="px-8 py-4 rounded-xl font-bold text-lg border-2 border-card-border text-muted hover:text-foreground hover:border-neon-purple/50 cursor-pointer transition-colors"
             onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
           >
-            РљР°Рє СЌС‚Рѕ СЂР°Р±РѕС‚Р°РµС‚ в†“
+            Как это работает ↓
           </motion.button>
         </motion.div>
       </motion.section>
 
-      {/* ===== РљРђРљ Р­РўРћ Р РђР‘РћРўРђР•Рў ===== */}
+      {/* ===== КАК ЭТО РАБОТАЕТ ===== */}
       <section className="relative py-24 px-4">
         <motion.div
           variants={containerVariants}
@@ -403,11 +403,11 @@ function LandingContent({
         >
           <motion.div variants={itemVariants} className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-              РљР°Рє СЌС‚Рѕ{" "}
-              <span className="text-neon-purple text-glow-purple">СЂР°Р±РѕС‚Р°РµС‚</span>
+              Как это{" "}
+              <span className="text-neon-purple text-glow-purple">работает</span>
             </h2>
             <p className="text-muted max-w-md mx-auto text-sm">
-              РўСЂРё С€Р°РіР°, С‡С‚РѕР±С‹ СѓР·РЅР°С‚СЊ вЂ” С‚С‹ РіРµСЂРѕР№ РёР»Рё РїСЂРѕСЃС‚Рѕ РќРџРЎ
+              Три шага, чтобы узнать — ты герой или просто НПС
             </p>
           </motion.div>
 
@@ -415,21 +415,21 @@ function LandingContent({
             {[
               {
                 step: "01",
-                icon: "рџ“ё",
-                title: "РџРѕРєР°Р¶Рё СЃРµР±СЏ",
-                desc: "Р—Р°РїРѕСЃС‚Рё С„РѕС‚Рѕ. РџРѕРєР°Р¶Рё СЃРІРѕР№ СЃС‚РёР»СЊ. РџСѓСЃС‚СЊ С‚РІРѕР№ РІР°Р№Р± РіРѕРІРѕСЂРёС‚ Р·Р° С‚РµР±СЏ.",
+                icon: "📸",
+                title: "Покажи себя",
+                desc: "Запости фото. Покажи свой стиль. Пусть твой вайб говорит за тебя.",
               },
               {
                 step: "02",
-                icon: "рџ”—",
-                title: "РћС‚РїСЂР°РІСЊ СЃСЃС‹Р»РєСѓ",
-                desc: "РљРёРЅСЊ СЃРІРѕСЋ СѓРЅРёРєР°Р»СЊРЅСѓСЋ СЃСЃС‹Р»РєСѓ РґСЂСѓР·СЊСЏРј, РїРѕРґРїРёСЃС‡РёРєР°Рј РёР»Рё Р·Р°РїРѕСЃС‚Рё РІ СЃС‚РѕСЂРёСЃ.",
+                icon: "🔗",
+                title: "Отправь ссылку",
+                desc: "Кинь свою уникальную ссылку друзьям, подписчикам или запости в сторис.",
               },
               {
                 step: "03",
-                icon: "вљЎ",
-                title: "РџРѕР»СѓС‡Рё РѕС†РµРЅРєСѓ",
-                desc: "Р›СЋРґРё РіРѕР»РѕСЃСѓСЋС‚ +РђСѓСЂР° РёР»Рё в€’РђСѓСЂР°. РўРІРѕР№ С‚РёСЂ РјРµРЅСЏРµС‚СЃСЏ РІ СЂРµР°Р»СЊРЅРѕРј РІСЂРµРјРµРЅРё.",
+                icon: "⚡",
+                title: "Получи оценку",
+                desc: "Люди голосуют +Аура или −Аура. Твой тир меняется в реальном времени.",
               },
             ].map((item, i) => (
               <motion.div
@@ -443,7 +443,7 @@ function LandingContent({
                 className="neo-card rounded-2xl p-6 border-2 border-card-border"
               >
                 <div className="text-xs text-muted font-mono mb-4">
-                  РЁРђР“ {item.step}
+                  ШАГ {item.step}
                 </div>
                 <div className="text-4xl mb-4">{item.icon}</div>
                 <h3 className="text-lg font-bold mb-2">{item.title}</h3>
@@ -454,7 +454,7 @@ function LandingContent({
         </motion.div>
       </section>
 
-      {/* ===== РЎРРЎРўР•РњРђ РўРР РћР’ ===== */}
+      {/* ===== СИСТЕМА ТИРОВ ===== */}
       <section className="relative py-24 px-4 border-t border-card-border/50">
         <motion.div
           variants={containerVariants}
@@ -465,11 +465,11 @@ function LandingContent({
         >
           <motion.div variants={itemVariants} className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-              РўРёСЂС‹{" "}
-              <span className="text-neon-green text-glow-green">Р°СѓСЂС‹</span>
+              Тиры{" "}
+              <span className="text-neon-green text-glow-green">ауры</span>
             </h2>
             <p className="text-muted max-w-md mx-auto text-sm">
-              РўРІРѕСЏ Р°СѓСЂР° С‚СѓС…РЅРµС‚ РЅР° 3% РєР°Р¶РґС‹Рµ 24С‡. РћСЃС‚Р°РІР°Р№СЃСЏ РЅР° РІРёРґСѓ РёР»Рё РѕСЃС‚Р°РІР°Р№СЃСЏ РѕР±С‹С‡РЅС‹Рј РќРџРЎ.
+              Твоя аура тухнет на 3% каждые 24ч. Оставайся на виду или оставайся обычным НПС.
             </p>
           </motion.div>
 
@@ -485,7 +485,7 @@ function LandingContent({
                 >
                   <div className="text-5xl mb-4 text-center">{tier.emoji}</div>
                   <div className={`text-xs font-mono mb-2 ${tier.color} text-center`}>
-                    {tier.range} РћР§РљРћР’
+                    {tier.range} ОЧКОВ
                   </div>
                   <h3 className={`text-xl font-bold mb-2 ${tier.color} text-center`}>
                     {tier.name}
@@ -506,7 +506,7 @@ function LandingContent({
                 <div className="relative z-10">
                   <div className="text-6xl mb-4 text-center">{TIER_DATA[3].emoji}</div>
                   <div className={`text-xs font-mono mb-2 ${TIER_DATA[3].color} text-center uppercase tracking-widest`}>
-                    {TIER_DATA[3].range} РћР§РљРћР’
+                    {TIER_DATA[3].range} ОЧКОВ
                   </div>
                   <h3 className={`text-2xl font-black mb-2 ${TIER_DATA[3].color} text-center italic`}>
                     {TIER_DATA[3].name}
@@ -519,7 +519,7 @@ function LandingContent({
         </motion.div>
       </section>
 
-      {/* ===== Р”Р•РњРћ РљРђР РўРћР§РљР ===== */}
+      {/* ===== ДЕМО КАРТОЧКИ ===== */}
       <section className="relative py-24 px-4 overflow-x-hidden">
         <motion.div
           variants={containerVariants}
@@ -530,12 +530,12 @@ function LandingContent({
         >
           <motion.div variants={itemVariants} className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-              Р–РёРІС‹Рµ{" "}
-              <span className="text-neon-pink">РєР°СЂС‚РѕС‡РєРё</span>{" "}
-              Р°СѓСЂС‹
+              Живые{" "}
+              <span className="text-neon-pink">карточки</span>{" "}
+              ауры
             </h2>
             <p className="text-muted max-w-md mx-auto text-sm">
-              РўР°Рє РІС‹РіР»СЏРґРёС‚ С‚РІРѕР№ РїСЂРѕС„РёР»СЊ, РєРѕРіРґР° Р»СЋРґРё С‡РµРєР°СЋС‚ С‚РІРѕСЋ Р°СѓСЂСѓ
+              Так выглядит твой профиль, когда люди чекают твою ауру
             </p>
           </motion.div>
 
@@ -553,7 +553,7 @@ function LandingContent({
         </motion.div>
       </section>
 
-      {/* ===== РЎРўРђРўРРЎРўРРљРђ ===== */}
+      {/* ===== СТАТИСТИКА ===== */}
       <section className="relative pb-24 px-4 -mt-8">
         <motion.div
           variants={containerVariants}
@@ -619,10 +619,10 @@ function LandingContent({
           <div className="neo-card rounded-2xl p-8 md:p-12">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
               {[
-                { value: 12847, label: "РџСЂРѕРІРµСЂРѕРє Р°СѓСЂС‹", suffix: "" },
-                { value: 4200, label: "РђРєС‚РёРІРЅС‹С… СЋР·РµСЂРѕРІ", suffix: "+" },
-                { value: 89, label: "РЎСЂРµРґРЅСЏСЏ СЃРµСЃСЃРёСЏ", suffix: "СЃ" },
-                { value: 3, label: "Р”РЅРµРІРЅРѕРµ Р·Р°С‚СѓС…Р°РЅРёРµ", suffix: "%" },
+                { value: 12847, label: "Проверок ауры", suffix: "" },
+                { value: 4200, label: "Активных юзеров", suffix: "+" },
+                { value: 89, label: "Средняя сессия", suffix: "с" },
+                { value: 3, label: "Дневное затухание", suffix: "%" },
               ].map((stat, i) => (
                 <div key={i}>
                   <div className="text-2xl md:text-3xl font-bold text-neon-purple">
@@ -639,7 +639,7 @@ function LandingContent({
         </motion.div>
       </section>
 
-      {/* ===== Р¤РРќРђР›Р¬РќР«Р™ CTA ===== */}
+      {/* ===== ФИНАЛЬНЫЙ CTA ===== */}
       <section className="relative py-32 px-4 text-center">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -648,12 +648,12 @@ function LandingContent({
           transition={{ duration: 0.8 }}
         >
           <h2 className="text-4xl sm:text-5xl font-bold mb-6">
-            Р“РѕС‚РѕРІ СѓР·РЅР°С‚СЊ СЃРІРѕСЋ{" "}
-            <span className="text-neon-green text-glow-green">РЅР°СЃС‚РѕСЏС‰СѓСЋ</span>{" "}
-            Р°СѓСЂСѓ?
+            Готов узнать свою{" "}
+            <span className="text-neon-green text-glow-green">настоящую</span>{" "}
+            ауру?
           </h2>
           <p className="text-muted text-lg mb-10 max-w-md mx-auto italic">
-            РҐРІР°С‚РёС‚ РєСЌРїРёС‚СЊ. РџСѓСЃС‚СЊ РґСЂСѓРіРёРµ СЂРµС€Р°СЋС‚.
+            Хватит кэпить. Пусть другие решают.
           </p>
           <Link href={user ? "/profile" : "/login"}>
           <motion.button
@@ -662,26 +662,27 @@ function LandingContent({
             transition={{ type: "spring", stiffness: 400, damping: 10 }}
             className="px-10 py-5 rounded-xl font-bold text-xl bg-gradient-to-r from-neon-purple to-neon-pink text-white neon-glow-purple cursor-pointer"
           >
-            вљЎ РџРѕР»СѓС‡РёС‚СЊ СЃРІРѕСЋ РђСѓСЂСѓ
+            ⚡ Получить свою Ауру
           </motion.button>
           </Link>
         </motion.div>
       </section>
 
-      {/* ===== Р¤РЈРўР•Р  ===== */}
+      {/* ===== ФУТЕР ===== */}
       <footer className="border-t border-card-border py-8 px-4 mt-auto">
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-sm text-muted">
             <span className="text-neon-purple font-bold">AURA</span>
             <span className="text-white/70">.NET</span>
-            {" "}В© 2026
+            {" "}© 2026
           </div>
           <div className="text-[10px] text-muted/50 uppercase tracking-widest">
-            РЎРґРµР»Р°РЅРѕ РЅР° РІР°Р№Р±Р°С… Рё РЅСѓР»РµРІРѕРј Р±СЋРґР¶РµС‚Рµ рџ«Ў
+            Сделано на вайбах и нулевом бюджете 🫡
           </div>
         </div>
       </footer>
     </div>
   );
 }
+
 
