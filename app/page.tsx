@@ -3,6 +3,7 @@
 import { motion, useScroll, useTransform, Variants } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
 import AuraCard from "@/components/AuraCard";
+import LeaderboardPreview from "@/components/LeaderboardPreview";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -146,18 +147,71 @@ function FloatingOrb({
 
 const supabase = createClient();
 
+interface LandingAuraLeader {
+  id: string;
+  username: string;
+  displayName: string;
+  auraPoints: number;
+}
+
+interface LandingGrowthLeader extends LandingAuraLeader {
+  growthPoints: number;
+}
+
+interface LandingLeaderboardPayload {
+  auraLeaders: LandingAuraLeader[];
+  growthLeaders: LandingGrowthLeader[];
+}
+
+const EMPTY_LEADERBOARD: LandingLeaderboardPayload = {
+  auraLeaders: [],
+  growthLeaders: [],
+};
+
 export default function LandingPage() {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [leaderboardData, setLeaderboardData] = useState<LandingLeaderboardPayload>(EMPTY_LEADERBOARD);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
 
   useEffect(() => {
     setMounted(true);
-    
+    let isActive = true;
+
+    const loadLeaderboardPreview = async () => {
+      try {
+        const response = await fetch("/api/leaderboard/preview");
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as LandingLeaderboardPayload;
+        if (isActive) {
+          setLeaderboardData({
+            auraLeaders: payload.auraLeaders || [],
+            growthLeaders: payload.growthLeaders || [],
+          });
+        }
+      } catch {
+        // Для лендинга молча оставляем пустой teaser, если API недоступен.
+      } finally {
+        if (isActive) {
+          setLeaderboardLoading(false);
+        }
+      }
+    };
+
+    void loadLeaderboardPreview();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isActive = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
@@ -170,13 +224,21 @@ export default function LandingPage() {
             </div>
          </div>
        ) : (
-         <LandingContent user={user} />
+         <LandingContent user={user} leaderboardData={leaderboardData} leaderboardLoading={leaderboardLoading} />
        )}
     </div>
   );
 }
 
-function LandingContent({ user }: { user: any }) {
+function LandingContent({
+  user,
+  leaderboardData,
+  leaderboardLoading,
+}: {
+  user: any;
+  leaderboardData: LandingLeaderboardPayload;
+  leaderboardLoading: boolean;
+}) {
   const heroRef = useRef(null);
 
   const { scrollYProgress } = useScroll({
@@ -483,6 +545,61 @@ function LandingContent({ user }: { user: any }) {
       </section>
 
       {/* ===== СТАТИСТИКА ===== */}
+      <section className="relative pb-24 px-4 -mt-8">
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ margin: "-100px" }}
+          className="max-w-5xl mx-auto"
+        >
+          <motion.div variants={itemVariants} className="text-center mb-10">
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+              Р“Р»Р°РІРЅС‹Рµ{" "}
+              <span className="text-neon-green text-glow-green">Р»РёРґРµСЂС‹</span>
+            </h2>
+            <p className="text-muted max-w-2xl mx-auto text-sm">
+              РљС‚Рѕ РґРµСЂР¶РёС‚ РІРµСЂС… РїРѕ РѕР±С‰РµР№ Р°СѓСЂРµ Рё РєС‚Рѕ СѓСЃРєРѕСЂСЏРµС‚СЃСЏ Р±С‹СЃС‚СЂРµРµ РІСЃРµС… Р·Р° РїРѕСЃР»РµРґРЅСЋСЋ РЅРµРґРµР»СЋ.
+            </p>
+          </motion.div>
+
+          <motion.div variants={itemVariants} className="relative">
+            <div className="pointer-events-none absolute -inset-8 bg-neon-purple/10 blur-3xl" />
+            <div className="relative">
+              {leaderboardLoading ? (
+                <div className="w-full rounded-[2rem] border border-white/12 bg-black/30 backdrop-blur-xl p-5 md:p-7 animate-pulse">
+                  <div className="h-6 w-56 bg-white/10 rounded mb-4" />
+                  <div className="h-4 w-full max-w-xl bg-white/8 rounded mb-6" />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-2">
+                      <div className="h-4 w-32 bg-white/10 rounded" />
+                      <div className="h-9 bg-white/7 rounded-xl" />
+                      <div className="h-9 bg-white/7 rounded-xl" />
+                      <div className="h-9 bg-white/7 rounded-xl" />
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-2">
+                      <div className="h-4 w-32 bg-white/10 rounded" />
+                      <div className="h-9 bg-white/7 rounded-xl" />
+                      <div className="h-9 bg-white/7 rounded-xl" />
+                      <div className="h-9 bg-white/7 rounded-xl" />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <LeaderboardPreview
+                  variant="landing"
+                  title="РћСЃРЅРѕРІРЅС‹Рµ Р»РёРґРµСЂС‹"
+                  subtitle="РўРѕРї РїРѕ РѕР±С‰РµР№ Р°СѓСЂРµ Рё РїРѕ РїСЂРёСЂРѕСЃС‚Сѓ Р·Р° 7 РґРЅРµР№."
+                  auraLeaders={leaderboardData.auraLeaders}
+                  growthLeaders={leaderboardData.growthLeaders}
+                  currentUserId={user?.id || ""}
+                />
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      </section>
+
       <section className="relative py-24 px-4 font-unbounded">
         <motion.div
           initial={{ opacity: 0 }}
