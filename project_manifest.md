@@ -13,7 +13,7 @@
 - **Styling:** [Tailwind CSS 4](file:///package.json)
 - **Animations:** [Framer Motion 12](file:///package.json)
 - **Database / Auth:** [Supabase](file:///schema.sql) (PostgreSQL, RLS)
-- **AI Engine:** Groq SDK
+- **AI Engine:** Local Autonomous (Randomized Sarcasm) - *Groq SDK removed for Vercel stability*
 - **Integration:** Telegram Web Apps API (`@twa-dev/sdk`)
 
 ---
@@ -22,12 +22,12 @@
 - [`app/`](file:///app) — Основные роуты и API.
   - `/check/[username]` — Публичный просмотр чужой карточки.
   - `/profile` — Настройки и управление своим профилем.
-  - `/api/vote` — Логика голосования (Up/Down).
+  - `/api/vote` — Логика голосования (Up/Down) с автономными ИИ-комментариями.
   - `/api/boost` — Система буста карточек.
-  - `/api/ai` — Генерация ИИ-комментариев и аналитики.
+  - `proxy.ts` — Прокси-слой для сессий (бывший middleware.ts).
 - [`components/`](file:///components) — UI-компоненты.
   - `UniversalCreatorCard.tsx` — **ГЛАВНЫЙ компонент**. Визуализация карточки со всеми тирами.
-  - `AuraCard.tsx` — Обертка с логикой данных и оверлеями (Auth, BurnLog).
+  - `AuraCard.tsx` — Обертка с логикой данных и оверлеями (Auth, BurnLog). Оптимизирована для гидрации.
   - `BurnLog.tsx` — Список тех, кто "сжигал" ауру.
 - [`lib/`](file:///lib) — Бизнес-логика и хелперы.
   - `aura.ts` — Правила расчета тиров и эмодзи.
