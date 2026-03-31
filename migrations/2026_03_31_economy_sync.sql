@@ -1,46 +1,14 @@
+-- Safe sync migration for aura economy (2026-03-31)
+
 create extension if not exists pgcrypto;
 
-create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  username text unique not null,
-  display_name text,
-  avatar_url text,
-  telegram_user text,
-  status text,
-  aura_points integer not null default 100,
-  is_nickname_selected boolean not null default false,
-  last_decay_at timestamp with time zone not null default timezone('utc'::text, now()),
-  daily_streak integer not null default 0,
-  last_reward_at timestamp with time zone,
-  ai_comment text,
-  created_at timestamp with time zone not null default timezone('utc'::text, now())
-);
-
-alter table public.profiles add column if not exists display_name text;
-alter table public.profiles add column if not exists avatar_url text;
-alter table public.profiles add column if not exists telegram_user text;
 alter table public.profiles add column if not exists status text;
-alter table public.profiles add column if not exists aura_points integer not null default 100;
-alter table public.profiles add column if not exists is_nickname_selected boolean not null default false;
 alter table public.profiles add column if not exists last_decay_at timestamp with time zone not null default timezone('utc'::text, now());
 alter table public.profiles add column if not exists daily_streak integer not null default 0;
 alter table public.profiles add column if not exists last_reward_at timestamp with time zone;
 alter table public.profiles add column if not exists ai_comment text;
-alter table public.profiles add column if not exists created_at timestamp with time zone not null default timezone('utc'::text, now());
-
-update public.profiles
-set display_name = username
-where display_name is null or btrim(display_name) = '';
-
-create table if not exists public.votes (
-  id uuid default gen_random_uuid() primary key,
-  voter_id uuid references auth.users(id) on delete set null,
-  target_id uuid references public.profiles(id) on delete cascade not null,
-  vote_type text not null check (vote_type in ('up', 'down')),
-  is_anonymous boolean not null default false,
-  created_at timestamp with time zone not null default timezone('utc'::text, now()),
-  unique (voter_id, target_id)
-);
+alter table public.profiles add column if not exists telegram_user text;
+alter table public.profiles add column if not exists is_nickname_selected boolean not null default false;
 
 alter table public.votes add column if not exists is_anonymous boolean not null default false;
 
@@ -54,8 +22,6 @@ create table if not exists public.transactions (
   created_at timestamp with time zone not null default timezone('utc'::text, now())
 );
 
-alter table public.transactions add column if not exists metadata jsonb not null default '{}'::jsonb;
-
 create table if not exists public.boosts (
   id uuid default gen_random_uuid() primary key,
   profile_id uuid references public.profiles(id) on delete cascade not null,
@@ -65,61 +31,11 @@ create table if not exists public.boosts (
 
 create index if not exists profiles_aura_points_idx on public.profiles (aura_points desc);
 create index if not exists votes_target_vote_type_idx on public.votes (target_id, vote_type);
-create index if not exists votes_target_created_idx on public.votes (target_id, created_at desc);
 create index if not exists boosts_profile_expires_idx on public.boosts (profile_id, expires_at desc);
 create index if not exists transactions_user_created_idx on public.transactions (user_id, created_at desc);
 
-alter table public.profiles enable row level security;
-alter table public.votes enable row level security;
 alter table public.boosts enable row level security;
 alter table public.transactions enable row level security;
-
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_policies
-    where schemaname = 'public' and tablename = 'profiles' and policyname = 'profiles_select_all'
-  ) then
-    create policy profiles_select_all on public.profiles
-      for select
-      using (true);
-  end if;
-
-  if not exists (
-    select 1
-    from pg_policies
-    where schemaname = 'public' and tablename = 'profiles' and policyname = 'profiles_update_own'
-  ) then
-    create policy profiles_update_own on public.profiles
-      for update
-      using (auth.uid() = id)
-      with check (auth.uid() = id);
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_policies
-    where schemaname = 'public' and tablename = 'votes' and policyname = 'votes_select_all'
-  ) then
-    create policy votes_select_all on public.votes
-      for select
-      using (true);
-  end if;
-
-  if not exists (
-    select 1
-    from pg_policies
-    where schemaname = 'public' and tablename = 'votes' and policyname = 'votes_insert_own'
-  ) then
-    create policy votes_insert_own on public.votes
-      for insert
-      with check (auth.uid() = voter_id);
-  end if;
-end $$;
 
 do $$
 begin
@@ -142,10 +58,7 @@ begin
       for insert
       with check (auth.uid() = profile_id);
   end if;
-end $$;
 
-do $$
-begin
   if not exists (
     select 1
     from pg_policies
@@ -166,77 +79,6 @@ begin
       with check (auth.uid() = user_id);
   end if;
 end $$;
-
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_base_username text;
-  v_username text;
-  v_suffix integer := 0;
-begin
-  if (new.raw_app_meta_data->>'is_anonymous')::boolean = true or new.email is null then
-    return new;
-  end if;
-
-  v_base_username := coalesce(
-    nullif(new.raw_user_meta_data->>'username', ''),
-    nullif(split_part(new.email, '@', 1), ''),
-    'user_' || substring(new.id::text from 1 for 8)
-  );
-
-  v_base_username := regexp_replace(v_base_username, '[[:space:]]+', '_', 'g');
-  v_base_username := left(v_base_username, 20);
-
-  if char_length(v_base_username) < 3 then
-    v_base_username := 'user_' || substring(new.id::text from 1 for 8);
-  end if;
-
-  v_username := v_base_username;
-
-  while exists (
-    select 1
-    from public.profiles p
-    where p.username = v_username
-      and p.id <> new.id
-  ) loop
-    v_suffix := v_suffix + 1;
-    v_username := left(v_base_username, greatest(3, 20 - char_length(v_suffix::text) - 1)) || '_' || v_suffix::text;
-  end loop;
-
-  insert into public.profiles (
-    id,
-    username,
-    display_name,
-    avatar_url,
-    telegram_user,
-    is_nickname_selected
-  )
-  values (
-    new.id,
-    v_username,
-    v_username,
-    new.raw_user_meta_data->>'avatar_url',
-    new.raw_user_meta_data->>'username',
-    false
-  )
-  on conflict (id) do update
-  set avatar_url = coalesce(excluded.avatar_url, public.profiles.avatar_url),
-      telegram_user = coalesce(excluded.telegram_user, public.profiles.telegram_user);
-
-  return new;
-end;
-$$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-
-create trigger on_auth_user_created
-  after insert or update on auth.users
-  for each row
-  execute procedure public.handle_new_user();
 
 create or replace function public.increment_aura(target_id uuid, amount integer)
 returns void
@@ -378,7 +220,7 @@ do $$
 declare
   v_table text;
 begin
-  foreach v_table in array array['profiles', 'votes', 'transactions', 'boosts']
+  foreach v_table in array array['transactions', 'boosts']
   loop
     if not exists (
       select 1
@@ -394,4 +236,3 @@ begin
     end if;
   end loop;
 end $$;
-

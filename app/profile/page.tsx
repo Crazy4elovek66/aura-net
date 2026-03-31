@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import AuraCard from "@/components/AuraCard";
+import AuraTransactions from "@/components/AuraTransactions";
 import ShareButton from "@/components/ShareButton";
-import DecayCheck from "@/components/DecayCheck";
 import Link from "next/link";
 import { headers } from "next/headers";
 import CopyLink from "./CopyLink";
@@ -21,6 +21,8 @@ export default async function ProfilePage() {
   if (!user) {
     redirect("/login");
   }
+
+  await supabase.rpc("apply_daily_decay", { p_profile_id: user.id });
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -53,10 +55,16 @@ export default async function ProfilePage() {
     .eq("target_id", user.id)
     .eq("vote_type", "down");
 
+  const { data: transactions } = await supabase
+    .from("transactions")
+    .select("id, amount, type, description, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
   return (
     <div className="min-h-screen bg-background text-white font-unbounded relative overflow-hidden">
       <Background />
-      <DecayCheck profileId={profile.id} />
       
       <div className="smart-container px-6 pt-6">
         <header className="flex justify-between items-center mb-8 gap-4">
@@ -92,7 +100,9 @@ export default async function ProfilePage() {
             status={profile.status}
             isBoosted={!!boost}
           />
-          
+
+          <AuraTransactions transactions={transactions || []} />
+
           <div className="w-full flex flex-col items-center space-y-6 pb-20">
             <CopyLink link={`${origin}/check/${profile.username}`} />
             <ShareButton username={profile.username} />

@@ -1,14 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import AuraCard from "@/components/AuraCard";
-import VoteButtons from "@/components/VoteButtons";
-import { motion } from "framer-motion";
 import Background from "@/components/Background";
 
 interface CheckPageProps {
-  params: {
+  params: Promise<{
     username: string;
-  };
+  }>;
 }
 
 export default async function CheckPage({ params }: CheckPageProps) {

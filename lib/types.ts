@@ -3,22 +3,34 @@ export interface AuraUser {
   username: string;
   display_name: string;
   avatar_url: string | null;
+  telegram_user: string | null;
   aura_points: number;
-  total_votes_up: number;
-  total_votes_down: number;
   status: string | null;
   is_nickname_selected: boolean;
+  last_decay_at: string;
+  daily_streak: number;
+  last_reward_at: string | null;
   created_at: string;
-  last_active_at: string;
 }
 
 export interface Vote {
   id: string;
-  user_id: string;
-  voter_ip: string;
+  voter_id: string | null;
+  target_id: string;
   vote_type: "up" | "down";
-  points: number;
+  is_anonymous: boolean;
+  created_at: string;
+}
+
+export interface AuraTransaction {
+  id: string;
+  user_id: string;
+  amount: number;
+  type: string;
+  description: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
 }
 
 export type VoteAction = "up" | "down";
+
