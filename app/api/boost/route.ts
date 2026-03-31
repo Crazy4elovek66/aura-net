@@ -1,3 +1,4 @@
+﻿import { BOOST_COST, BOOST_DURATION_MINUTES } from "@/lib/economy";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
@@ -34,6 +35,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Only the owner can boost their profile" }, { status: 403 });
   }
 
+  const nowIso = new Date().toISOString();
+
+  const { data: activeBoost, error: activeBoostError } = await supabase
+    .from("boosts")
+    .select("expires_at")
+    .eq("profile_id", profileId)
+    .gt("expires_at", nowIso)
+    .order("expires_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (activeBoostError) {
+    return NextResponse.json({ error: "Не удалось проверить активный буст" }, { status: 500 });
+  }
+
+  if (activeBoost?.expires_at) {
+    return NextResponse.json(
+      {
+        error: "Буст уже активен. Дождись окончания текущего.",
+        cooldownUntil: activeBoost.expires_at,
+      },
+      { status: 429 },
+    );
+  }
+
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("aura_points")
@@ -44,20 +70,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Не удалось получить профиль" }, { status: 500 });
   }
 
-  if ((profile?.aura_points || 0) < 200) {
-    return NextResponse.json({ error: "Недостаточно ауры для буста (нужно 200)" }, { status: 403 });
+  if ((profile?.aura_points || 0) < BOOST_COST) {
+    return NextResponse.json({ error: `Недостаточно ауры для буста (нужно ${BOOST_COST})` }, { status: 403 });
   }
 
   const { error: auraDeductError } = await supabase.rpc("increment_aura", {
     target_id: profileId,
-    amount: -200,
+    amount: -BOOST_COST,
   });
 
   if (auraDeductError) {
     return NextResponse.json({ error: "Ошибка списания ауры" }, { status: 500 });
   }
 
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + BOOST_DURATION_MINUTES * 60 * 1000).toISOString();
 
   const { data: boostRow, error: boostInsertError } = await supabase
     .from("boosts")
@@ -69,33 +95,32 @@ export async function POST(request: Request) {
     .single();
 
   if (boostInsertError) {
-    await admin.rpc("increment_aura", { target_id: profileId, amount: 200 });
+    await admin.rpc("increment_aura", { target_id: profileId, amount: BOOST_COST });
     return NextResponse.json({ error: "Не удалось активировать буст" }, { status: 500 });
   }
 
   if (!boostRow) {
-    await admin.rpc("increment_aura", { target_id: profileId, amount: 200 });
+    await admin.rpc("increment_aura", { target_id: profileId, amount: BOOST_COST });
     return NextResponse.json({ error: "Не удалось создать запись буста" }, { status: 500 });
   }
 
   const { error: transactionError } = await supabase.from("transactions").insert({
     user_id: user.id,
-    amount: -200,
+    amount: -BOOST_COST,
     type: "boost",
-    description: "Активация буста профиля (15 минут)",
+    description: `Активация буста профиля (${BOOST_DURATION_MINUTES} минут)`,
     metadata: {
       source: "boost",
       boostId: boostRow.id,
-      durationMinutes: 15,
+      durationMinutes: BOOST_DURATION_MINUTES,
     },
   });
 
   if (transactionError) {
     await admin.from("boosts").delete().eq("id", boostRow.id);
-    await admin.rpc("increment_aura", { target_id: profileId, amount: 200 });
+    await admin.rpc("increment_aura", { target_id: profileId, amount: BOOST_COST });
     return NextResponse.json({ error: "Не удалось записать буст в историю" }, { status: 500 });
   }
 
   return NextResponse.json({ success: true, expiresAt });
 }
-

@@ -9,10 +9,10 @@ interface AuraTransaction {
 const TYPE_LABELS: Record<string, string> = {
   tax: "Налог",
   boost: "Буст",
-  decay: "Decay",
+  decay: "Декай",
   vote_up: "Получен плюс",
   vote_down: "Получен минус",
-  daily_reward: "Daily reward",
+  daily_reward: "Ежедневный бонус",
 };
 
 function formatAmount(amount: number) {

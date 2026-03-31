@@ -130,11 +130,18 @@ export default function AuraCard({
           const { error: authError } = await supabase.auth.signInAnonymously();
           if (authError) throw authError;
           
-          await fetch("/api/vote", {
+          const voteResponse = await fetch("/api/vote", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ targetId: profileId, type, isAnonymous: true }),
           });
+
+          const votePayload = await voteResponse.json().catch(() => ({}));
+
+          if (!voteResponse.ok) {
+            alert(votePayload.error || "Не удалось отправить голос");
+            return;
+          }
 
           // Сразу после голоса — "Притормози ковбой" (призыв к регистрации)
           triggerAuthToast();
@@ -150,8 +157,12 @@ export default function AuraCard({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ targetId: profileId, type }),
         });
+
+        const payload = await res.json().catch(() => ({}));
         if (res.ok) {
           router.refresh();
+        } else {
+          alert(payload.error || "Не удалось отправить голос");
         }
       }
     } catch (e) {

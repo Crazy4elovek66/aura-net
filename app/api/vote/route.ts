@@ -1,21 +1,39 @@
+﻿import {
+  ANONYMOUS_VOTE_COST,
+  ANONYMOUS_VOTE_DAILY_LIMIT,
+  VOTE_DAILY_LIMIT,
+  getUtcDayWindow,
+} from "@/lib/economy";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 const AI_COMMENTS = {
   up: [
-    "Этот вайб нельзя купить. Ты просто Сигма, бро.",
+    "Этот вайб нельзя купить. Ты просто сигма, бро.",
     "Аура зашкаливает. Главный герой в здании.",
-    "Фр фр, это было мощно. +Респект в копилку.",
-    "Чистый люкс. Твой стиль — это искусство.",
+    "Это было мощно. Плюс респект в копилку.",
+    "Чистый люкс. Твой стиль это искусство.",
   ],
   down: [
-    "Ой... Кажется, кто-то словил кринж.",
+    "Ой... Похоже кто-то словил кринж.",
     "Минус аура. Попробуй сменить имидж, НПС.",
-    "Вайб-чек провален. Сегодня не твой день, бести.",
-    "Энергетика на нуле. Срочно нужно подзарядиться.",
+    "Вайб-чек провален. Сегодня не твой день.",
+    "Энергетика на нуле. Срочно нужна перезарядка.",
   ],
 };
+
+async function rollbackAnonymousCharge(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  taxTransactionId: string | null,
+) {
+  await admin.rpc("increment_aura", { target_id: userId, amount: ANONYMOUS_VOTE_COST });
+
+  if (taxTransactionId) {
+    await admin.from("transactions").delete().eq("id", taxTransactionId);
+  }
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -48,46 +66,117 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Нужно войти, чтобы влиять на ауру" }, { status: 401 });
+    return NextResponse.json({ error: "Нужно войти, чтобы голосовать" }, { status: 401 });
   }
 
   if (user.id === targetId) {
-    return NextResponse.json({ error: "Самолайк — залог НПС. Не делай так." }, { status: 400 });
+    return NextResponse.json({ error: "Голосовать за себя нельзя" }, { status: 400 });
   }
+
+  const { start, end } = getUtcDayWindow();
+  const dayStartIso = start.toISOString();
+  const dayEndIso = end.toISOString();
+
+  const [regularVotesResult, anonymousVotesResult] = await Promise.all([
+    supabase
+      .from("votes")
+      .select("id", { count: "exact", head: true })
+      .eq("voter_id", user.id)
+      .eq("is_anonymous", false)
+      .gte("created_at", dayStartIso)
+      .lt("created_at", dayEndIso),
+    supabase
+      .from("votes")
+      .select("id", { count: "exact", head: true })
+      .eq("voter_id", user.id)
+      .eq("is_anonymous", true)
+      .gte("created_at", dayStartIso)
+      .lt("created_at", dayEndIso),
+  ]);
+
+  if (regularVotesResult.error || anonymousVotesResult.error) {
+    return NextResponse.json({ error: "Не удалось проверить дневные лимиты" }, { status: 500 });
+  }
+
+  const regularVotesToday = regularVotesResult.count ?? 0;
+  const anonymousVotesToday = anonymousVotesResult.count ?? 0;
+
+  if (isAnonymous && anonymousVotesToday >= ANONYMOUS_VOTE_DAILY_LIMIT) {
+    return NextResponse.json(
+      {
+        error: `Лимит анонимных голосов на сегодня исчерпан (${ANONYMOUS_VOTE_DAILY_LIMIT}/${ANONYMOUS_VOTE_DAILY_LIMIT})`,
+      },
+      { status: 429 },
+    );
+  }
+
+  if (!isAnonymous && regularVotesToday >= VOTE_DAILY_LIMIT) {
+    return NextResponse.json(
+      {
+        error: `Лимит обычных голосов на сегодня исчерпан (${VOTE_DAILY_LIMIT}/${VOTE_DAILY_LIMIT})`,
+      },
+      { status: 429 },
+    );
+  }
+
+  let taxTransactionId: string | null = null;
 
   if (isAnonymous) {
     const { data: voterProfile, error: voterProfileError } = await supabase
       .from("profiles")
       .select("aura_points")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
     if (voterProfileError) {
       return NextResponse.json({ error: "Не удалось проверить баланс" }, { status: 500 });
     }
 
-    if ((voterProfile?.aura_points || 0) < 50) {
-      return NextResponse.json({ error: "Недостаточно ауры для анонимного голоса (нужно 50)" }, { status: 403 });
+    if (!voterProfile) {
+      return NextResponse.json(
+        { error: "Для анонимного голоса нужен полноценный профиль с аурой" },
+        { status: 403 },
+      );
     }
 
-    const { error: taxError } = await supabase.rpc("increment_aura", { target_id: user.id, amount: -50 });
-
-    if (taxError) {
-      return NextResponse.json({ error: "Не удалось списать налог за анонимность" }, { status: 500 });
+    if ((voterProfile.aura_points || 0) < ANONYMOUS_VOTE_COST) {
+      return NextResponse.json(
+        { error: `Недостаточно ауры для анонимного голоса (нужно ${ANONYMOUS_VOTE_COST})` },
+        { status: 403 },
+      );
     }
 
-    const { error: taxTransactionError } = await supabase.from("transactions").insert({
-      user_id: user.id,
-      amount: -50,
-      type: "tax",
-      description: "Налог за анонимное голосование",
-      metadata: { source: "vote", anonymous: true },
+    const { error: taxError } = await supabase.rpc("increment_aura", {
+      target_id: user.id,
+      amount: -ANONYMOUS_VOTE_COST,
     });
 
+    if (taxError) {
+      const notEnoughAura = taxError.message.toLowerCase().includes("insufficient aura");
+      return NextResponse.json(
+        { error: notEnoughAura ? "Недостаточно ауры для анонимного голоса" : "Не удалось списать стоимость анонимности" },
+        { status: notEnoughAura ? 403 : 500 },
+      );
+    }
+
+    const { data: taxTransaction, error: taxTransactionError } = await supabase
+      .from("transactions")
+      .insert({
+        user_id: user.id,
+        amount: -ANONYMOUS_VOTE_COST,
+        type: "tax",
+        description: "Налог за анонимное голосование",
+        metadata: { source: "vote", anonymous: true },
+      })
+      .select("id")
+      .single();
+
     if (taxTransactionError) {
-      await admin.rpc("increment_aura", { target_id: user.id, amount: 50 });
+      await rollbackAnonymousCharge(admin, user.id, null);
       return NextResponse.json({ error: "Не удалось зафиксировать налог в истории" }, { status: 500 });
     }
+
+    taxTransactionId = taxTransaction.id;
   }
 
   const { data: createdVote, error: voteError } = await supabase
@@ -102,14 +191,21 @@ export async function POST(request: Request) {
     .single();
 
   if (voteError) {
+    if (isAnonymous) {
+      await rollbackAnonymousCharge(admin, user.id, taxTransactionId);
+    }
+
     if (voteError.code === "23505") {
-      return NextResponse.json({ error: "Ты уже раздал базы этому профилю" }, { status: 400 });
+      return NextResponse.json({ error: "Ты уже голосовал за этот профиль" }, { status: 400 });
     }
 
     return NextResponse.json({ error: voteError.message }, { status: 500 });
   }
 
   if (!createdVote) {
+    if (isAnonymous) {
+      await rollbackAnonymousCharge(admin, user.id, taxTransactionId);
+    }
     return NextResponse.json({ error: "Не удалось создать голос" }, { status: 500 });
   }
 
@@ -120,10 +216,10 @@ export async function POST(request: Request) {
   });
 
   if (auraUpdateError) {
-    await supabase.from("votes").delete().eq("id", createdVote.id);
+    await admin.from("votes").delete().eq("id", createdVote.id);
 
     if (isAnonymous) {
-      await admin.rpc("increment_aura", { target_id: user.id, amount: 50 });
+      await rollbackAnonymousCharge(admin, user.id, taxTransactionId);
     }
 
     return NextResponse.json({ error: "Не удалось обновить ауру цели" }, { status: 500 });
@@ -155,6 +251,11 @@ export async function POST(request: Request) {
     success: true,
     comment: aiComment,
     newAuraChange: auraChange,
+    limits: {
+      regularUsed: regularVotesToday + Number(!isAnonymous),
+      regularLimit: VOTE_DAILY_LIMIT,
+      anonymousUsed: anonymousVotesToday + Number(isAnonymous),
+      anonymousLimit: ANONYMOUS_VOTE_DAILY_LIMIT,
+    },
   });
 }
-

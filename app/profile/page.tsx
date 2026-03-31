@@ -1,12 +1,23 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import AuraCard from "@/components/AuraCard";
+﻿import AuraCard from "@/components/AuraCard";
 import AuraTransactions from "@/components/AuraTransactions";
-import ShareButton from "@/components/ShareButton";
-import Link from "next/link";
-import { headers } from "next/headers";
-import CopyLink from "./CopyLink";
 import Background from "@/components/Background";
+import DailyRewardCard from "@/components/DailyRewardCard";
+import LeaderboardPreview from "@/components/LeaderboardPreview";
+import { getDailyRewardStatus } from "@/lib/economy";
+import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import CopyLink from "./CopyLink";
+import ShareButton from "@/components/ShareButton";
+
+interface GrowthLeaderRow {
+  user_id: string;
+  username: string;
+  display_name: string;
+  aura_points: number;
+  growth_points: number;
+}
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -24,48 +35,65 @@ export default async function ProfilePage() {
 
   await supabase.rpc("apply_daily_decay", { p_profile_id: user.id });
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
 
   if (!profile) {
     redirect("/login");
   }
 
-  // 1. Проверяем буст
-  const { data: boost } = await supabase
-    .from("boosts")
-    .select("id")
-    .eq("profile_id", user.id)
-    .gt("expires_at", new Date().toISOString())
-    .maybeSingle();
+  const dailyRewardState = getDailyRewardStatus(profile.daily_streak, profile.last_reward_at);
 
-  // 2. Считаем голоса
-  const { count: votesUp } = await supabase
-    .from("votes")
-    .select("*", { count: 'exact', head: true })
-    .eq("target_id", user.id)
-    .eq("vote_type", "up");
+  const [boostResult, votesUpResult, votesDownResult, transactionsResult, auraLeadersResult, growthLeadersResult] =
+    await Promise.all([
+      supabase
+        .from("boosts")
+        .select("id")
+        .eq("profile_id", user.id)
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle(),
+      supabase
+        .from("votes")
+        .select("id", { count: "exact", head: true })
+        .eq("target_id", user.id)
+        .eq("vote_type", "up"),
+      supabase
+        .from("votes")
+        .select("id", { count: "exact", head: true })
+        .eq("target_id", user.id)
+        .eq("vote_type", "down"),
+      supabase
+        .from("transactions")
+        .select("id, amount, type, description, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("profiles")
+        .select("id, username, display_name, aura_points")
+        .order("aura_points", { ascending: false })
+        .limit(5),
+      supabase.rpc("get_growth_leaderboard", { p_days: 7, p_limit: 5 }),
+    ]);
 
-  const { count: votesDown } = await supabase
-    .from("votes")
-    .select("*", { count: 'exact', head: true })
-    .eq("target_id", user.id)
-    .eq("vote_type", "down");
+  const auraLeaders = (auraLeadersResult.data || []).map((row) => ({
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name || row.username,
+    auraPoints: Number(row.aura_points || 0),
+  }));
 
-  const { data: transactions } = await supabase
-    .from("transactions")
-    .select("id, amount, type, description, created_at")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const growthLeaders = ((growthLeadersResult.data as GrowthLeaderRow[] | null) || []).map((row) => ({
+    id: row.user_id,
+    username: row.username,
+    displayName: row.display_name || row.username,
+    auraPoints: Number(row.aura_points || 0),
+    growthPoints: Number(row.growth_points || 0),
+  }));
 
   return (
     <div className="min-h-screen bg-background text-white font-unbounded relative overflow-hidden">
       <Background />
-      
+
       <div className="smart-container px-6 pt-6">
         <header className="flex justify-between items-center mb-8 gap-4">
           <h1 className="text-3xl font-black italic uppercase text-white tracking-tighter leading-none">Профиль</h1>
@@ -93,15 +121,29 @@ export default async function ProfilePage() {
             displayName={profile.display_name || profile.username}
             avatarUrl={profile.avatar_url}
             auraPoints={profile.aura_points}
-            totalVotesUp={votesUp || 0}
-            totalVotesDown={votesDown || 0}
+            totalVotesUp={votesUpResult.count || 0}
+            totalVotesDown={votesDownResult.count || 0}
             profileId={profile.id}
             isOwner={true}
             status={profile.status}
-            isBoosted={!!boost}
+            isBoosted={Boolean(boostResult.data)}
           />
 
-          <AuraTransactions transactions={transactions || []} />
+          <DailyRewardCard
+            initialState={{
+              canClaim: dailyRewardState.canClaim,
+              claimedToday: dailyRewardState.claimedToday,
+              streak: profile.daily_streak,
+              rewardToday: dailyRewardState.rewardToday,
+              nextReward: dailyRewardState.nextReward,
+              availableAt: dailyRewardState.availableAt,
+              streakWillReset: dailyRewardState.streakWillReset,
+            }}
+          />
+
+          <LeaderboardPreview auraLeaders={auraLeaders} growthLeaders={growthLeaders} currentUserId={user.id} />
+
+          <AuraTransactions transactions={transactionsResult.data || []} />
 
           <div className="w-full flex flex-col items-center space-y-6 pb-20">
             <CopyLink link={`${origin}/check/${profile.username}`} />
