@@ -50,6 +50,7 @@ export default function LeaderboardPreview({
   subtitle,
 }: LeaderboardPreviewProps) {
   const isLanding = variant === "landing";
+  const returnTo = variant === "profile" ? "profile" : "home";
 
   const resolvedTitle = title ?? (isLanding ? UI_TEXT.titleLanding : UI_TEXT.titleProfile);
   const resolvedSubtitle = subtitle ?? (isLanding ? UI_TEXT.subtitleLanding : "");
@@ -84,7 +85,7 @@ export default function LeaderboardPreview({
             {auraLeaders.map((leader, index) => (
               <Link
                 key={leader.id}
-                href={`/check/${leader.username}`}
+                href={`/check/${leader.username}?returnTo=${returnTo}`}
                 className={`flex items-center justify-between rounded-xl border px-3 py-2 transition-colors hover:border-neon-purple/40 ${rowClass(
                   leader.id === currentUserId,
                   isLanding,
@@ -107,7 +108,7 @@ export default function LeaderboardPreview({
               growthLeaders.map((leader, index) => (
                 <Link
                   key={leader.id}
-                  href={`/check/${leader.username}`}
+                  href={`/check/${leader.username}?returnTo=${returnTo}`}
                   className={`flex items-center justify-between rounded-xl border px-3 py-2 transition-colors hover:border-neon-purple/40 ${rowClass(
                     leader.id === currentUserId,
                     isLanding,

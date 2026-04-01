@@ -2,21 +2,29 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import AuraCard from "@/components/AuraCard";
 import Background from "@/components/Background";
+import CheckPageNav from "./CheckPageNav";
 
 interface CheckPageProps {
   params: Promise<{
     username: string;
   }>;
+  searchParams: Promise<{
+    returnTo?: string;
+  }>;
 }
 
-export default async function CheckPage({ params }: CheckPageProps) {
+export default async function CheckPage({ params, searchParams }: CheckPageProps) {
   const { username } = await params;
+  const { returnTo } = await searchParams;
   const supabase = await createClient();
 
-  // Получаем текущего юзера
-  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  const {
+    data: { user: currentUser },
+  } = await supabase.auth.getUser();
 
-  // Ищем профиль цели
+  const isAuthorizedUser = Boolean(currentUser && !currentUser.is_anonymous);
+  const backFallback: "/" | "/profile" = returnTo === "profile" && isAuthorizedUser ? "/profile" : "/";
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
@@ -27,16 +35,15 @@ export default async function CheckPage({ params }: CheckPageProps) {
     notFound();
   }
 
-  // Считаем голоса
   const { count: votesUp } = await supabase
     .from("votes")
-    .select("*", { count: 'exact', head: true })
+    .select("*", { count: "exact", head: true })
     .eq("target_id", profile.id)
     .eq("vote_type", "up");
 
   const { count: votesDown } = await supabase
     .from("votes")
-    .select("*", { count: 'exact', head: true })
+    .select("*", { count: "exact", head: true })
     .eq("target_id", profile.id)
     .eq("vote_type", "down");
 
@@ -46,6 +53,10 @@ export default async function CheckPage({ params }: CheckPageProps) {
 
       <div className="smart-container px-6 pt-16">
         <header className="text-center mb-12">
+          <div className="mb-6 flex justify-center">
+            <CheckPageNav isAuthorized={isAuthorizedUser} backFallback={backFallback} />
+          </div>
+
           <h1 className="text-2xl font-bold mb-2 uppercase italic tracking-tighter">Чекаем вайб</h1>
           <p className="text-white/40 text-[10px] font-black uppercase tracking-widest">В чьи-то руки попала власть... ⚡</p>
         </header>
@@ -61,7 +72,6 @@ export default async function CheckPage({ params }: CheckPageProps) {
             profileId={profile.id}
             isOwner={currentUser?.id === profile.id}
           />
-
         </main>
       </div>
     </div>
