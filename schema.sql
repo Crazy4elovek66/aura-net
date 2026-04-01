@@ -349,7 +349,7 @@ begin
       p_profile_id,
       -v_aura_to_lose,
       'decay',
-      format('Daily decay (%s day(s))', v_days),
+      format('Угасание ауры: %s дн.', v_days),
       jsonb_build_object('daysPassed', v_days, 'ratePerDay', 0.03)
     );
   end if;
@@ -434,7 +434,7 @@ begin
     p_profile_id,
     v_reward,
     'daily_reward',
-    format('Ежедневная награда: день %s', v_streak),
+    format('Награда за серию: день %s', v_streak),
     jsonb_build_object(
       'source', 'daily_reward',
       'streak', v_streak,

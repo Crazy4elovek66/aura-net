@@ -9,11 +9,31 @@ interface AuraTransaction {
 const TYPE_LABELS: Record<string, string> = {
   tax: "Налог",
   boost: "Буст",
-  decay: "Декай",
+  decay: "Угасание ауры",
   vote_up: "Получен плюс",
   vote_down: "Получен минус",
-  daily_reward: "Ежедневный бонус",
+  daily_reward: "Ежедневная награда",
 };
+
+function extractFirstNumber(value: string | null): number | null {
+  if (!value) return null;
+  const match = value.match(/(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+
+function formatDescription(tx: AuraTransaction) {
+  if (tx.type === "decay") {
+    const days = extractFirstNumber(tx.description);
+    return days && days > 1 ? `Ежедневное угасание: ${days} дн.` : "Ежедневное угасание";
+  }
+
+  if (tx.type === "daily_reward") {
+    const day = extractFirstNumber(tx.description);
+    return day ? `Награда за серию: день ${day}` : "Награда за серию";
+  }
+
+  return tx.description || "Без описания";
+}
 
 function formatAmount(amount: number) {
   const sign = amount > 0 ? "+" : "";
@@ -50,7 +70,7 @@ export default function AuraTransactions({ transactions }: { transactions: AuraT
             >
               <div className="min-w-0 pr-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">{label}</p>
-                <p className="text-[10px] text-white/50 truncate">{tx.description || "Без описания"}</p>
+                <p className="text-[10px] text-white/50 truncate">{formatDescription(tx)}</p>
                 <p className="text-[9px] uppercase tracking-[0.1em] text-white/35">
                   {new Date(tx.created_at).toLocaleString("ru-RU")}
                 </p>

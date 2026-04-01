@@ -188,7 +188,7 @@ begin
       p_profile_id,
       -v_aura_to_lose,
       'decay',
-      format('Daily decay (%s day(s))', v_days),
+      format('Угасание ауры: %s дн.', v_days),
       jsonb_build_object('daysPassed', v_days, 'ratePerDay', 0.03)
     );
   end if;

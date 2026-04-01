@@ -69,7 +69,7 @@ const TIER_DATA = [
     range: "2001 - 5000",
     name: "ТОТ САМЫЙ",
     emoji: "😏",
-    desc: "Элитный статус. Доступ к Журналу Сгорания и индиговое свечение.",
+    desc: "Элитный статус. Доступ к Журналу Угасания и индиговое свечение.",
     color: "text-indigo-400",
     border: "border-indigo-400/30",
     bg: "bg-indigo-400/5",
@@ -163,9 +163,27 @@ interface LandingLeaderboardPayload {
   growthLeaders: LandingGrowthLeader[];
 }
 
+interface LandingStatsPayload {
+  profilesCount: number;
+  votesCount: number;
+  transactionsCount: number;
+  dailyDecayPercent: number;
+}
+
+interface LandingAuthUser {
+  id: string;
+}
+
 const EMPTY_LEADERBOARD: LandingLeaderboardPayload = {
   auraLeaders: [],
   growthLeaders: [],
+};
+
+const EMPTY_LANDING_STATS: LandingStatsPayload = {
+  profilesCount: 0,
+  votesCount: 0,
+  transactionsCount: 0,
+  dailyDecayPercent: 3,
 };
 
 const LANDING_LB_TEXT = {
@@ -179,9 +197,11 @@ const LANDING_LB_TEXT = {
 
 export default function LandingPage() {
   const [mounted, setMounted] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<LandingAuthUser | null>(null);
   const [leaderboardData, setLeaderboardData] = useState<LandingLeaderboardPayload>(EMPTY_LEADERBOARD);
   const [leaderboardLoading, setLeaderboardLoading] = useState(true);
+  const [landingStats, setLandingStats] = useState<LandingStatsPayload>(EMPTY_LANDING_STATS);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     setMounted(true);
@@ -189,7 +209,7 @@ export default function LandingPage() {
 
     void supabase.auth.getUser().then(({ data }) => {
       if (isActive) {
-        setUser(data.user ?? null);
+        setUser(data.user ? { id: data.user.id } : null);
       }
     });
 
@@ -217,14 +237,45 @@ export default function LandingPage() {
       }
     };
 
+    const loadLandingStats = async () => {
+      try {
+        const response = await fetch("/api/landing-stats", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as Partial<LandingStatsPayload>;
+        if (isActive) {
+          setLandingStats({
+            profilesCount: Number(payload.profilesCount || 0),
+            votesCount: Number(payload.votesCount || 0),
+            transactionsCount: Number(payload.transactionsCount || 0),
+            dailyDecayPercent: Number(payload.dailyDecayPercent || 3),
+          });
+        }
+      } catch {
+        // На лендинге оставляем нули, если статистика недоступна.
+      } finally {
+        if (isActive) {
+          setStatsLoading(false);
+        }
+      }
+    };
+
     void loadLeaderboardPreview();
+    void loadLandingStats();
+
+    const statsInterval = window.setInterval(() => {
+      void loadLandingStats();
+    }, 60_000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      setUser(session?.user ? { id: session.user.id } : null);
     });
 
     return () => {
       isActive = false;
+      window.clearInterval(statsInterval);
       subscription.unsubscribe();
     };
   }, []);
@@ -239,7 +290,13 @@ export default function LandingPage() {
             </div>
          </div>
        ) : (
-         <LandingContent user={user} leaderboardData={leaderboardData} leaderboardLoading={leaderboardLoading} />
+         <LandingContent
+           user={user}
+           leaderboardData={leaderboardData}
+           leaderboardLoading={leaderboardLoading}
+           landingStats={landingStats}
+           statsLoading={statsLoading}
+         />
        )}
     </div>
   );
@@ -249,10 +306,14 @@ function LandingContent({
   user,
   leaderboardData,
   leaderboardLoading,
+  landingStats,
+  statsLoading,
 }: {
-  user: any;
+  user: LandingAuthUser | null;
   leaderboardData: LandingLeaderboardPayload;
   leaderboardLoading: boolean;
+  landingStats: LandingStatsPayload;
+  statsLoading: boolean;
 }) {
   const heroRef = useRef(null);
 
@@ -279,6 +340,13 @@ function LandingContent({
       transition: { duration: 0.6, ease: "easeOut" },
     },
   };
+
+  const landingStatItems = [
+    { value: landingStats.profilesCount, label: "Профилей", suffix: "" },
+    { value: landingStats.votesCount, label: "Голосов", suffix: "" },
+    { value: landingStats.transactionsCount, label: "Транзакций ауры", suffix: "" },
+    { value: landingStats.dailyDecayPercent, label: "Угасание в день", suffix: "%" },
+  ];
 
   return (
     <div className="relative overflow-hidden animate-in fade-in duration-700">
@@ -475,7 +543,7 @@ function LandingContent({
               <span className="text-neon-green text-glow-green">ауры</span>
             </h2>
             <p className="text-muted max-w-md mx-auto text-sm">
-              Твоя аура тухнет на 3% каждые 24ч. Оставайся на виду или оставайся обычным НПС.
+              Твоя аура угасает на 3% каждые 24ч. Оставайся на виду или оставайся обычным НПС.
             </p>
           </motion.div>
 
@@ -623,24 +691,30 @@ function LandingContent({
           className="max-w-4xl mx-auto"
         >
           <div className="neo-card rounded-2xl p-8 md:p-12">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-              {[
-                { value: 12847, label: "Проверок ауры", suffix: "" },
-                { value: 4200, label: "Активных юзеров", suffix: "+" },
-                { value: 89, label: "Средняя сессия", suffix: "с" },
-                { value: 3, label: "Дневное затухание", suffix: "%" },
-              ].map((stat, i) => (
-                <div key={i}>
-                  <div className="text-2xl md:text-3xl font-bold text-neon-purple">
-                    <AnimatedCounter target={stat.value} />
-                    {stat.suffix}
+            {statsLoading ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center animate-pulse">
+                {[1, 2, 3, 4].map((slot) => (
+                  <div key={slot}>
+                    <div className="h-9 w-20 mx-auto rounded bg-white/10" />
+                    <div className="h-3 w-24 mx-auto mt-2 rounded bg-white/8" />
                   </div>
-                  <div className="text-[10px] text-muted mt-1 uppercase tracking-wider">
-                    {stat.label}
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+                {landingStatItems.map((stat) => (
+                  <div key={stat.label}>
+                    <div className="text-2xl md:text-3xl font-bold text-neon-purple">
+                      <AnimatedCounter target={stat.value} />
+                      {stat.suffix}
+                    </div>
+                    <div className="text-[10px] text-muted mt-1 uppercase tracking-wider">
+                      {stat.label}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </motion.div>
       </section>
