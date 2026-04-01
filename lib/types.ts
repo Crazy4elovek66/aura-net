@@ -6,6 +6,7 @@ export interface AuraUser {
   telegram_user: string | null;
   aura_points: number;
   status: string | null;
+  special_card: string | null;
   is_nickname_selected: boolean;
   last_decay_at: string;
   daily_streak: number;

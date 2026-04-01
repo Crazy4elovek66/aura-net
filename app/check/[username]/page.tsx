@@ -24,6 +24,12 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
 
   const isAuthorizedUser = Boolean(currentUser && !currentUser.is_anonymous);
   const backFallback: "/" | "/profile" = returnTo === "profile" && isAuthorizedUser ? "/profile" : "/";
+  let canManageSpecialCard = false;
+
+  if (isAuthorizedUser) {
+    const { data: isAdmin } = await supabase.rpc("is_platform_admin");
+    canManageSpecialCard = Boolean(isAdmin);
+  }
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -71,6 +77,9 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
             totalVotesDown={votesDown || 0}
             profileId={profile.id}
             isOwner={currentUser?.id === profile.id}
+            status={profile.status}
+            specialCard={profile.special_card}
+            canManageSpecialCard={canManageSpecialCard}
           />
         </main>
       </div>

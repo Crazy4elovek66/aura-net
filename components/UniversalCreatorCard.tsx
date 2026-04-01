@@ -26,7 +26,7 @@ interface UniversalCreatorCardProps {
    isOwner?: boolean;
    isEditing?: boolean;
    editValue?: string;
-   tier?: 'NPC' | 'HERO' | 'THAT_ONE' | 'SIGMA' | 'ADMIN';
+   tier?: 'NPC' | 'HERO' | 'THAT_ONE' | 'SIGMA' | 'ADMIN' | 'RESONANCE';
    isAdmin?: boolean;
    onNameEditClick?: () => void;
    onEditChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -64,10 +64,7 @@ const getNextTierStyle = (pts: number) => {
 export default function UniversalCreatorCard({
    data,
    children,
-   themeColor: propThemeColor,
-   tierTextColor,
    glowColor: propGlowColor,
-   externalGlow: propExternalGlow,
    isOwner = false,
    isEditing = false,
    editValue = "",
@@ -92,18 +89,17 @@ export default function UniversalCreatorCard({
    const isSigma = tier === 'SIGMA';
    const isHero = tier === 'HERO';
    const isThatOne = tier === 'THAT_ONE';
+   const isResonance = tier === 'RESONANCE';
    const isAdmin = propIsAdmin || tier === 'ADMIN';
    
-   const themeColor = propThemeColor || (isSigma ? "yellow-500" : isThatOne ? "indigo-500" : (isHero || isAdmin) ? "purple-500" : "white/20");
-    const glowColor = propGlowColor || (isSigma ? "rgba(251,191,36,0.4)" : isThatOne ? "rgba(79,70,229,0.2)" : (isHero || isAdmin) ? "rgba(168,85,247,0.3)" : "rgba(255,255,255,0.05)");
-    const externalGlow = propExternalGlow ?? (isSigma || isAdmin || isThatOne);
+    const glowColor = propGlowColor || (isSigma ? "rgba(251,191,36,0.4)" : isThatOne ? "rgba(79,70,229,0.2)" : isResonance ? "rgba(34,211,238,0.25)" : (isHero || isAdmin) ? "rgba(168,85,247,0.3)" : "rgba(255,255,255,0.05)");
  
     const primaryGlow = glowColor;
     const auraPoints = parseFloat(data.auraPoints.replace(/\s/g, '').replace(',', '.')) * (data.auraPoints.includes('K') ? 1000 : 1);
-    const emoji = isAdmin ? "👑" : getAuraEmoji(auraPoints);
+    const emoji = isAdmin ? "👑" : isResonance ? "🧭" : getAuraEmoji(auraPoints);
     
     // Default Tier Emojis for the "Box" if no avatar
-    const defaultTierEmoji = isAdmin ? "👑" : getAuraEmoji(auraPoints);
+    const defaultTierEmoji = isAdmin ? "👑" : isResonance ? "🧭" : getAuraEmoji(auraPoints);
 
    return (
       <div
@@ -111,6 +107,7 @@ export default function UniversalCreatorCard({
             isAdmin ? 'architect-card shadow-[0_0_60px_-10px_rgba(168,85,247,0.5)] border-purple-500/40' :
             isSigma ? 'border-yellow-400/60' :
             isThatOne ? 'border-indigo-500/50' :
+            isResonance ? 'resonance-card border-cyan-400/45' :
             isHero ? 'border-purple-500/40' :
             'border-white/[0.08] shadow-2xl'
          }`}
@@ -121,6 +118,8 @@ export default function UniversalCreatorCard({
                ? `0 0 50px -10px ${primaryGlow}`
                : isThatOne
                ? `0 0 35px -10px ${primaryGlow}`
+               : isResonance
+               ? `0 0 28px -12px ${primaryGlow}`
                : isHero 
                ? "0 20px 40px rgba(0,0,0,0.5)"
                : "0 30px 60px rgba(0,0,0,0.8)"
@@ -142,10 +141,11 @@ export default function UniversalCreatorCard({
                         isAdmin ? 'text-white architect-text-glow' :
                         isSigma ? 'text-yellow-400 text-glow-yellow-intense' : 
                         isThatOne ? 'text-indigo-400 text-glow-indigo-intense' :
+                        isResonance ? 'text-cyan-300 resonance-text-glow' :
                         isHero ? 'text-purple-400' : 
                         'text-white/70'
                      }`}>
-                        {isAdmin ? "АРХИТЕКТОР" : data.tier}
+                        {isAdmin ? "АРХИТЕКТОР" : isResonance ? "РЕЗОНАНС" : data.tier}
                      </span>
                      {/* DYNAMIC EMOJI BADGE (REFINED SCALE) */}
                      <div className="relative w-[2.6em] sm:w-[2.2em] h-[2.6em] sm:h-[2.2em] rounded-full bg-white/[0.05] border border-white/10 backdrop-blur-md shadow-2xl transition-transform group-hover:scale-110 flex-none self-center overflow-hidden">
@@ -167,6 +167,7 @@ export default function UniversalCreatorCard({
                                  isAdmin ? 'architect-text-glow' :
                                  isSigma ? 'text-yellow-400 text-glow-yellow-intense' : 
                                  isThatOne ? 'text-indigo-400 text-glow-indigo-intense' :
+                                 isResonance ? 'text-cyan-300 resonance-text-glow' :
                                  isHero ? 'text-purple-400' : 
                                  'text-white'
                               }`}
@@ -181,6 +182,7 @@ export default function UniversalCreatorCard({
                                   isAdmin ? 'text-white architect-text-glow' :
                                   isSigma ? 'text-yellow-400 text-glow-yellow-intense' : 
                                   isThatOne ? 'text-indigo-400 text-glow-indigo-intense' :
+                                  isResonance ? 'text-cyan-300 resonance-text-glow' :
                                   isHero ? 'text-purple-400' : 
                                   'text-white'
                               } ${isOwner ? 'cursor-pointer hover:text-white/80' : ''}`}
@@ -205,10 +207,16 @@ export default function UniversalCreatorCard({
                         <div className="absolute -inset-[0.25em] sm:-inset-[0.3em] rounded-full border-[2px] border-purple-400/10 border-l-purple-300 border-r-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.6)] animate-[spin_6s_linear_infinite_reverse]" style={{ willChange: "transform" }} />
                      </div>
                   )}
+                  {isResonance && (
+                     <div className="absolute inset-0 z-0 pointer-events-none">
+                        <div className="absolute -inset-[0.2em] rounded-2xl border border-cyan-300/40 shadow-[0_0_10px_rgba(34,211,238,0.25)]" />
+                     </div>
+                  )}
                   <div className={`w-[5em] sm:w-[4.5em] h-[5em] sm:h-[4.5em] flex items-center justify-center transition-all duration-500 relative z-10 overflow-hidden ${
                         isAdmin ? 'rounded-full hover:shadow-[0_0_20px_rgba(168,85,247,0.4)]' :
                         isSigma ? 'rounded-2xl bg-yellow-500/10 border-2 border-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.2)]' :
                         isThatOne ? 'rounded-2xl bg-indigo-500/10 border-2 border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]' :
+                        isResonance ? 'rounded-2xl bg-cyan-500/10 border-2 border-cyan-300/70 shadow-[0_0_12px_rgba(34,211,238,0.25)]' :
                         isHero ? 'rounded-2xl bg-purple-500/10 border-2 border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.2)]' :
                         'rounded-2xl bg-white/5 border-2 border-white/20 shadow-inner'
                      }`}
@@ -240,7 +248,7 @@ export default function UniversalCreatorCard({
                      <div 
                         className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-3/5 rounded-full" 
                         style={{ 
-                           backgroundColor: isSigma ? '#eab308' : isThatOne ? '#6366f1' : '#a855f7',
+                           backgroundColor: isSigma ? '#eab308' : isThatOne ? '#6366f1' : isResonance ? '#22d3ee' : '#a855f7',
                            boxShadow: `0 0 10px ${primaryGlow}` 
                         }} 
                      />
@@ -260,7 +268,7 @@ export default function UniversalCreatorCard({
                   ) : (
                      <div className="py-[0.2em]">
                         <p className={`font-semibold italic leading-snug pr-[0.1em] ${
-                           isAdmin ? 'text-white architect-text-glow text-[0.8em]' : 'text-white/90 text-[0.7em]'
+                           isAdmin ? 'text-white architect-text-glow text-[0.8em]' : isResonance ? 'text-cyan-100/95 resonance-text-glow text-[0.75em]' : 'text-white/90 text-[0.7em]'
                         } ${statusClassName || ''}`}>
                            {tier === 'NPC' ? '"У NPC нет своих мыслей. Только предустановленные скрипты."' : `"${data.verdict}"`}
                         </p>
@@ -272,7 +280,7 @@ export default function UniversalCreatorCard({
                         {(tier !== 'NPC' || isAdmin) && (
                            <div 
                               className="w-[0.4em] h-[0.4em] rounded-full animate-pulse self-center" 
-                              style={{ backgroundColor: isSigma ? '#eab308' : isThatOne ? '#6366f1' : '#a855f7' }}
+                              style={{ backgroundColor: isSigma ? '#eab308' : isThatOne ? '#6366f1' : isResonance ? '#22d3ee' : '#a855f7' }}
                            />
                         )}
                         <span className="text-[0.55em] font-black text-white/30 uppercase tracking-[0.2em]">
@@ -299,6 +307,7 @@ export default function UniversalCreatorCard({
                            isAdmin ? 'text-white architect-text-glow' :
                            isSigma ? 'text-yellow-400 sigma-points-animate' : 
                            isThatOne ? 'text-indigo-400 text-glow-indigo-intense' :
+                           isResonance ? 'text-cyan-300 resonance-text-glow' :
                            isHero ? 'text-purple-400' : 
                            'text-white'
                         }`}>

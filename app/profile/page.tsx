@@ -43,7 +43,7 @@ export default async function ProfilePage() {
 
   const dailyRewardState = getDailyRewardStatus(profile.daily_streak, profile.last_reward_at);
 
-  const [boostResult, votesUpResult, votesDownResult, transactionsResult, auraLeadersResult, growthLeadersResult] =
+  const [boostResult, votesUpResult, votesDownResult, transactionsResult, auraLeadersResult, growthLeadersResult, adminCheckResult] =
     await Promise.all([
       supabase
         .from("boosts")
@@ -73,6 +73,7 @@ export default async function ProfilePage() {
         .order("aura_points", { ascending: false })
         .limit(5),
       supabase.rpc("get_growth_leaderboard", { p_days: 7, p_limit: 5 }),
+      supabase.rpc("is_platform_admin"),
     ]);
 
   const auraLeaders = (auraLeadersResult.data || []).map((row) => ({
@@ -89,6 +90,8 @@ export default async function ProfilePage() {
     auraPoints: Number(row.aura_points || 0),
     growthPoints: Number(row.growth_points || 0),
   }));
+
+  const canManageSpecialCard = Boolean(adminCheckResult.data);
 
   return (
     <div className="min-h-screen bg-background text-white font-unbounded relative overflow-hidden">
@@ -126,6 +129,8 @@ export default async function ProfilePage() {
             profileId={profile.id}
             isOwner={true}
             status={profile.status}
+            specialCard={profile.special_card}
+            canManageSpecialCard={canManageSpecialCard}
             isBoosted={Boolean(boostResult.data)}
           />
 

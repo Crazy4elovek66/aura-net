@@ -417,6 +417,34 @@ body {
     0 0 30px rgba(255, 255, 255, 0.3);
 }
 
+@keyframes resonance-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 10px rgba(34, 211, 238, 0.14),
+      inset 0 0 20px rgba(34, 211, 238, 0.08);
+  }
+
+  50% {
+    box-shadow:
+      0 0 16px rgba(34, 211, 238, 0.22),
+      inset 0 0 24px rgba(45, 212, 191, 0.12);
+  }
+}
+
+.resonance-card {
+  background: linear-gradient(150deg, rgba(5, 10, 14, 0.95) 0%, rgba(6, 18, 22, 0.95) 100%) !important;
+  border: 1px solid rgba(34, 211, 238, 0.35) !important;
+  animation: resonance-breathe 5s ease-in-out infinite;
+}
+
+.resonance-text-glow {
+  text-shadow:
+    0 0 3px rgba(103, 232, 249, 0.95),
+    0 0 10px rgba(34, 211, 238, 0.5),
+    0 0 22px rgba(45, 212, 191, 0.3);
+}
+
 .glow-icon-wrap {
    filter: 
     drop-shadow(0 0 2px currentColor)

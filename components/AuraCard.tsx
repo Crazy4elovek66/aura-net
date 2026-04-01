@@ -1,12 +1,12 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { getAuraTier, formatAuraPoints, getAuraEmoji, type TierConfig } from "@/lib/aura";
+import { getAuraTier, formatAuraPoints } from "@/lib/aura";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { isResonanceSpecialCard } from "@/lib/special-card";
 import { useRouter } from "next/navigation";
 import BurnLog from "./BurnLog";
-import CreatorCardSlot00 from "./CreatorCardSlot00";
 import UniversalCreatorCard from "./UniversalCreatorCard";
 import React from "react";
 
@@ -19,6 +19,8 @@ interface AuraCardProps {
   totalVotesDown: number;
   profileId?: string;
   status?: string;
+  specialCard?: string | null;
+  canManageSpecialCard?: boolean;
   isBoosted?: boolean;
 }
 
@@ -33,12 +35,13 @@ export default function AuraCard({
   totalVotesDown: initialDown,
   profileId,
   status: initialStatus,
-  isBoosted: initialBoosted = false,
+  specialCard: initialSpecialCard = null,
+  canManageSpecialCard = false,
   isOwner = false,
 }: AuraCardProps & { isOwner?: boolean }) {
   const [auraPoints, setAuraPoints] = useState(initialAura);
-  const [upVotes, setUpVotes] = useState(initialUp);
-  const [downVotes, setDownVotes] = useState(initialDown);
+  const upVotes = initialUp;
+  const downVotes = initialDown;
   const [isEditing, setIsEditing] = useState(false);
   const [currentDisplayName, setCurrentDisplayName] = useState(displayName);
   const [editValue, setEditValue] = useState(displayName);
@@ -46,7 +49,7 @@ export default function AuraCard({
   const [statusValue, setStatusValue] = useState(initialStatus || "");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(initialStatus);
-  const [isBoosted, setIsBoosted] = useState(initialBoosted);
+  const [specialCard, setSpecialCard] = useState<string | null>(initialSpecialCard);
   const [showBurnLog, setShowBurnLog] = useState(false);
   const [showAuthToast, setShowAuthToast] = useState(false);
   const [toastVariant, setToastVariant] = useState<"auth" | "demo">("auth");
@@ -54,7 +57,6 @@ export default function AuraCard({
 
   const router = useRouter();
   const tier = getAuraTier(auraPoints);
-  const emoji = getAuraEmoji(auraPoints);
 
   // Реал-тайм обновления
   useEffect(() => {
@@ -66,6 +68,7 @@ export default function AuraCard({
         (payload) => {
           setAuraPoints(payload.new.aura_points);
           setStatus(payload.new.status);
+          setSpecialCard(payload.new.special_card);
           if (!isEditing) {
             setCurrentDisplayName(payload.new.display_name);
             setEditValue(payload.new.display_name);
@@ -101,25 +104,6 @@ export default function AuraCard({
     setLoading(false);
   };
 
-  const handleBoost = async () => {
-    if (!profileId || loading) return;
-    setLoading(true);
-    try {
-      const res = await fetch("/api/boost", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileId }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setIsBoosted(true);
-        setAuraPoints(prev => prev - 200);
-        router.refresh();
-      } else { alert(data.error); }
-    } catch (e) { alert("Ошибка сети"); }
-    finally { setLoading(false); }
-  };
-  
   const handleVote = async (type: 'up' | 'down') => {
     if (loading) return;
     setLoading(true);
@@ -201,7 +185,32 @@ export default function AuraCard({
     setToastTimer(timer);
   };
 
-  const isHighTier = tier.id === 'HERO' || tier.id === 'SIGMA';
+  const handleResonanceStatus = async (mode: "assign" | "remove") => {
+    if (!profileId || loading) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/special-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileId, mode }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        alert(payload.error || "Не удалось обновить спец-статус");
+        return;
+      }
+
+      setSpecialCard(payload.specialCard ?? null);
+      router.refresh();
+    } catch {
+      alert("Ошибка сети");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Расчет прогресса до следующего уровня
   const nextTierPoints = tier.id === 'NPC' ? 501 : tier.id === 'HERO' ? 2001 : tier.id === 'THAT_ONE' ? 5001 : null;
@@ -231,7 +240,12 @@ export default function AuraCard({
   };
 
   const isSpecialAdmin = username === "id1";
-  const tierId = isSpecialAdmin ? 'ADMIN' : (tier.id as 'NPC' | 'HERO' | 'SIGMA');
+  const isResonance = !isSpecialAdmin && isResonanceSpecialCard(specialCard);
+  const tierId = isSpecialAdmin
+    ? "ADMIN"
+    : isResonance
+      ? "RESONANCE"
+      : (tier.id as "NPC" | "HERO" | "THAT_ONE" | "SIGMA");
 
   return (
     <div id="aura-card-element" className="relative group w-fit mx-auto">
@@ -257,7 +271,7 @@ export default function AuraCard({
               handleUpdateStatus();
             }
           }}
-          statusClassName={isSpecialAdmin ? 'architect-text-glow' : ''}
+          statusClassName={isSpecialAdmin ? 'architect-text-glow' : isResonance ? 'resonance-text-glow' : ''}
           onAuraPlus={() => handleVote('up')}
           onAuraMinus={() => handleVote('down')}
        >
@@ -285,6 +299,21 @@ export default function AuraCard({
              {tier.id === 'HERO' && (
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-500/15 via-transparent to-purple-500/5" />
              )}
+             {isResonance && (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/14 via-slate-900/20 to-teal-400/10" />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(34,211,238,0.14)_0%,transparent_45%)]" />
+                  <div className="absolute inset-0 overflow-hidden">
+                    <motion.div
+                      initial={{ left: "-120%" }}
+                      animate={{ left: "180%" }}
+                      transition={{ duration: 6, repeat: Infinity, repeatDelay: 4, ease: "easeInOut" }}
+                      className="absolute top-0 bottom-0 w-[40%] skew-x-[-18deg] bg-gradient-to-r from-transparent via-cyan-300/15 to-transparent"
+                      style={{ willChange: "transform" }}
+                    />
+                  </div>
+                </>
+             )}
              {tier.id === 'NPC' && (
                 <div className="absolute inset-0 bg-white/[0.03]" />
              )}
@@ -295,6 +324,23 @@ export default function AuraCard({
              )}
           </div>
        </UniversalCreatorCard>
+
+       {canManageSpecialCard && profileId && !isSpecialAdmin && (
+         <div className="mt-4 flex justify-center">
+           <button
+             type="button"
+             onClick={() => handleResonanceStatus(isResonance ? "remove" : "assign")}
+             disabled={loading}
+             className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+               isResonance
+                 ? "border-cyan-300/50 text-cyan-100 bg-cyan-300/10 hover:bg-cyan-300/20"
+                 : "border-white/20 text-white/70 bg-white/5 hover:bg-white/10"
+             } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
+           >
+             {isResonance ? "Снять Резонанс" : "Выдать Резонанс"}
+           </button>
+         </div>
+       )}
 
        {/* AUTH TOAST OVERLAY */}
        <AnimatePresence>
