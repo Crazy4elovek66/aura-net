@@ -1,73 +1,95 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+
+type TelegramWebApp = {
+  initData?: string;
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
 
 export default function LoginPage() {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tmaDetected, setTmaDetected] = useState(false);
-  const scriptContainerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const scriptContainerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
     setMounted(true);
-    
-    // Проверка на запуск внутри Telegram
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg && tg.initData && tg.initData.length > 0) {
-      setTmaDetected(true);
-      
-      const handleTmaLogin = async () => {
+
+    let isActive = true;
+    let widgetTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const init = async () => {
+      try {
+        const {
+          data: { user: existingUser },
+        } = await supabase.auth.getUser();
+
+        if (!isActive) return;
+
+        if (existingUser) {
+          router.replace("/profile");
+          return;
+        }
+      } catch {
+        // Если сессия не читается, продолжаем обычный сценарий логина.
+      }
+
+      const tg = (window as Window & { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp;
+      if (tg && typeof tg.initData === "string" && tg.initData.length > 0) {
+        setTmaDetected(true);
+
         try {
-          console.log("[TMA] Starting auth with initData...");
           const response = await fetch("/api/auth/telegram", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-              initData: tg.initData,
-              origin: window.location.origin
-            })
+            body: JSON.stringify({ initData: tg.initData }),
           });
-          
+
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: "Ошибка сервера" }));
+            const errorData = (await response.json().catch(() => ({ error: "Ошибка сервера" }))) as {
+              error?: string;
+            };
             throw new Error(errorData.error || "Сбой API");
           }
 
-          const { email, password } = await response.json();
-          console.log("[TMA] Credentials received, signing in...");
+          const { email, password } = (await response.json()) as { email: string; password: string };
+          const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
-          // Очищаем любую зависшую/испорченную сессию перед новым входом
-          await supabase.auth.signOut();
+          if (signInError) {
+            throw signInError;
+          }
 
-          // Финальный шаг: устанавливаем сессию через пароль
-          const { error: signInError } = await supabase.auth.signInWithPassword({
-            email,
-            password
-          });
+          if (!isActive) return;
 
-          if (signInError) throw signInError;
-
-          console.log("[TMA] Auth success! Redirecting...");
-          // Т.к. сессия установлена, идем проверять ник (через перезагрузку для срабатывания мидлвара)
-          window.location.href = "/"; 
-        } catch (e: any) {
-          setError(`Ошибка авторизации: ${e.message}`);
-          console.error("TMA Login Error:", e);
-        } finally {
+          // Жесткий переход гарантирует, что SSR-слой увидит новую сессию сразу.
+          window.location.replace("/profile");
+          return;
+        } catch (authError: unknown) {
+          if (!isActive) return;
+          setError(`Ошибка авторизации: ${getErrorMessage(authError, "неизвестная ошибка")}`);
           setLoading(false);
+          return;
         }
-      };
-      handleTmaLogin();
-    } else {
-      // Обычный браузер - грузим виджет
-      const timer = setTimeout(() => {
+      }
+
+      widgetTimer = setTimeout(() => {
+        if (!isActive) return;
+
         if (scriptContainerRef.current) {
           const script = document.createElement("script");
           script.src = "https://telegram.org/js/telegram-widget.js?22";
@@ -77,24 +99,30 @@ export default function LoginPage() {
           script.setAttribute("data-auth-url", "/api/auth/telegram");
           script.setAttribute("data-request-access", "write");
           script.async = true;
-          
+
           scriptContainerRef.current.appendChild(script);
         }
-        setLoading(false);
-      }, 1000);
 
-      return () => clearTimeout(timer);
-    }
-  }, []);
+        setLoading(false);
+      }, 350);
+    };
+
+    void init();
+
+    return () => {
+      isActive = false;
+      if (widgetTimer) {
+        clearTimeout(widgetTimer);
+      }
+    };
+  }, [router, supabase]);
 
   if (!mounted) return null;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-black relative overflow-hidden font-unbounded">
-      {/* Сетка на фоне */}
       <div className="absolute inset-0 grid-bg opacity-30" />
 
-      {/* Фоновое свечение */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-neon-purple/20 blur-[120px] rounded-full" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-neon-pink/10 blur-[120px] rounded-full" />
@@ -112,11 +140,9 @@ export default function LoginPage() {
             </h1>
           </Link>
 
-          <h2 className="text-2xl font-bold mb-3">
-            {tmaDetected ? "Авторизация..." : "Добро пожаловать"}
-          </h2>
+          <h2 className="text-2xl font-bold mb-3">{tmaDetected ? "Авторизация..." : "Добро пожаловать"}</h2>
           <p className="text-muted mb-10 italic text-sm">
-            {tmaDetected ? "Входим в твой аккаунт через Telegram" : "Стань частью ауры за один клик ⚡"}
+            {tmaDetected ? "Входим в аккаунт через Telegram" : "Стань частью ауры за один клик"}
           </p>
 
           <div className="flex flex-col items-center justify-center min-h-[120px] gap-6">
@@ -142,14 +168,12 @@ export default function LoginPage() {
             {!tmaDetected && (
               <div
                 ref={scriptContainerRef}
-                className={`transition-all duration-700 transform ${loading ? 'opacity-0 scale-95 h-0' : 'opacity-100 scale-100'}`}
-              >
-                {/* Сюда вставится виджет Telegram */}
-              </div>
+                className={`transition-all duration-700 transform ${loading ? "opacity-0 scale-95 h-0" : "opacity-100 scale-100"}`}
+              />
             )}
 
             <div className="mt-6 text-[10px] text-muted/60 max-w-[260px] leading-relaxed uppercase tracking-tighter font-medium">
-              Мы используем безопасный вход через официальный Telegram SDK. Твои данные в безопасности.
+              Безопасный вход через официальный Telegram SDK.
             </div>
           </div>
 
@@ -164,9 +188,10 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-8 text-center text-[10px] text-muted/40 uppercase tracking-widest font-medium">
-          Входя, ты подтверждаешь, что ты не НПС 🫡
+          Входя, ты подтверждаешь, что ты не НПС
         </p>
       </motion.div>
     </div>
   );
 }
+

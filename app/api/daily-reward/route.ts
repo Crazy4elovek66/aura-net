@@ -1,40 +1,23 @@
-﻿import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export async function POST() {
   const supabase = await createClient();
-  let admin: ReturnType<typeof createAdminClient>;
-
-  try {
-    admin = createAdminClient();
-  } catch {
-    return NextResponse.json({ error: "Server config error" }, { status: 500 });
-  }
 
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser();
+
+  if (userError) {
+    return NextResponse.json({ error: "Не удалось проверить сессию" }, { status: 401 });
+  }
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profileError) {
-    return NextResponse.json({ error: "Не удалось проверить профиль" }, { status: 500 });
-  }
-
-  if (!profile) {
-    return NextResponse.json({ error: "Профиль не найден" }, { status: 404 });
-  }
-
-  const { data, error } = await admin
+  const { data, error } = await supabase
     .rpc("claim_daily_reward", { p_profile_id: user.id })
     .single();
 
@@ -86,3 +69,4 @@ export async function POST() {
     availableAt: rewardRow.available_at ?? null,
   });
 }
+

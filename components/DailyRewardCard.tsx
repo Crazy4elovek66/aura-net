@@ -1,7 +1,6 @@
 ﻿"use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 
 export interface DailyRewardInitialState {
   canClaim: boolean;
@@ -28,7 +27,6 @@ function formatDate(iso: string) {
 }
 
 export default function DailyRewardCard({ initialState }: DailyRewardCardProps) {
-  const router = useRouter();
   const [state, setState] = useState(initialState);
   const [loading, setLoading] = useState(false);
   const [lastClaimReward, setLastClaimReward] = useState<number | null>(null);
@@ -97,7 +95,6 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
         }));
       }
 
-      router.refresh();
     } catch {
       setError("Сетевая ошибка. Попробуй еще раз.");
     } finally {

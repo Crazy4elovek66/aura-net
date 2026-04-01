@@ -1,4 +1,6 @@
-﻿interface AuraLeader {
+import Link from "next/link";
+
+interface AuraLeader {
   id: string;
   username: string;
   displayName: string;
@@ -23,20 +25,17 @@ interface LeaderboardPreviewProps {
 }
 
 const UI_TEXT = {
-  titleLanding: "\u041b\u0438\u0434\u0435\u0440\u044b \u0430\u0443\u0440\u044b",
-  titleProfile: "\u041e\u0441\u043d\u043e\u0432\u043d\u044b\u0435 \u043b\u0438\u0434\u0435\u0440\u044b",
-  subtitleLanding:
-    "\u041a\u043e\u0433\u043e \u0441\u0435\u0439\u0447\u0430\u0441 \u043e\u0431\u0441\u0443\u0436\u0434\u0430\u044e\u0442 \u0438 \u043a\u0442\u043e \u0440\u0430\u0441\u0442\u0435\u0442 \u0431\u044b\u0441\u0442\u0440\u0435\u0435 \u0432\u0441\u0435\u0445.",
-  auraTop: "\u0422\u043e\u043f \u043f\u043e \u043e\u0431\u0449\u0435\u0439 \u0430\u0443\u0440\u0435",
-  growthTop: "\u0420\u043e\u0441\u0442 \u0437\u0430 7 \u0434\u043d\u0435\u0439",
-  growthEmpty: "\u041f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445 \u043f\u043e \u0440\u043e\u0441\u0442\u0443.",
+  titleLanding: "Лидеры ауры",
+  titleProfile: "Основные лидеры",
+  subtitleLanding: "Кого сейчас обсуждают и кто растет быстрее всех.",
+  auraTop: "Топ по общей ауре",
+  growthTop: "Рост за 7 дней",
+  growthEmpty: "Пока нет данных по росту.",
 };
 
 function rowClass(isCurrentUser: boolean, isLanding: boolean) {
   if (isCurrentUser) {
-    return isLanding
-      ? "border-neon-purple/50 bg-neon-purple/12"
-      : "border-neon-purple/40 bg-neon-purple/10";
+    return isLanding ? "border-neon-purple/50 bg-neon-purple/12" : "border-neon-purple/40 bg-neon-purple/10";
   }
 
   return isLanding ? "border-white/12 bg-white/[0.03]" : "border-white/10 bg-white/[0.02]";
@@ -83,9 +82,10 @@ export default function LeaderboardPreview({
           <p className="mb-2 text-[10px] uppercase tracking-[0.12em] text-neon-green/90">{UI_TEXT.auraTop}</p>
           <div className="space-y-2">
             {auraLeaders.map((leader, index) => (
-              <div
+              <Link
                 key={leader.id}
-                className={`flex items-center justify-between rounded-xl border px-3 py-2 transition-colors ${rowClass(
+                href={`/check/${leader.username}`}
+                className={`flex items-center justify-between rounded-xl border px-3 py-2 transition-colors hover:border-neon-purple/40 ${rowClass(
                   leader.id === currentUserId,
                   isLanding,
                 )}`}
@@ -95,7 +95,7 @@ export default function LeaderboardPreview({
                   {leader.displayName}
                 </p>
                 <p className="text-[11px] font-black text-neon-green">{leader.auraPoints}</p>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -105,9 +105,10 @@ export default function LeaderboardPreview({
           <div className="space-y-2">
             {growthLeaders.length ? (
               growthLeaders.map((leader, index) => (
-                <div
+                <Link
                   key={leader.id}
-                  className={`flex items-center justify-between rounded-xl border px-3 py-2 transition-colors ${rowClass(
+                  href={`/check/${leader.username}`}
+                  className={`flex items-center justify-between rounded-xl border px-3 py-2 transition-colors hover:border-neon-purple/40 ${rowClass(
                     leader.id === currentUserId,
                     isLanding,
                   )}`}
@@ -117,7 +118,7 @@ export default function LeaderboardPreview({
                     {leader.displayName}
                   </p>
                   <p className="text-[11px] font-black text-neon-pink">+{leader.growthPoints}</p>
-                </div>
+                </Link>
               ))
             ) : (
               <p className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] text-white/55">
@@ -130,3 +131,4 @@ export default function LeaderboardPreview({
     </section>
   );
 }
+

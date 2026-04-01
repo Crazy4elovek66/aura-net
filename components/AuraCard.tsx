@@ -48,6 +48,9 @@ export default function AuraCard({
   const [status, setStatus] = useState(initialStatus);
   const [isBoosted, setIsBoosted] = useState(initialBoosted);
   const [showBurnLog, setShowBurnLog] = useState(false);
+  const [showAuthToast, setShowAuthToast] = useState(false);
+  const [toastVariant, setToastVariant] = useState<"auth" | "demo">("auth");
+  const [toastTimer, setToastTimer] = useState<NodeJS.Timeout | null>(null);
 
   const router = useRouter();
   const tier = getAuraTier(auraPoints);
@@ -124,6 +127,15 @@ export default function AuraCard({
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       const isCheckPage = typeof window !== 'undefined' && window.location.pathname.includes('/check/');
 
+      if (!profileId) {
+        if (!currentUser) {
+          triggerAuthToast();
+        } else {
+          triggerDemoToast();
+        }
+        return;
+      }
+
       if (!currentUser) {
         if (isCheckPage) {
           // Анонимный вход + голос (для конверсии)
@@ -172,12 +184,18 @@ export default function AuraCard({
     }
   };
 
-  const [showAuthToast, setShowAuthToast] = useState(false);
-  const [toastTimer, setToastTimer] = useState<NodeJS.Timeout | null>(null);
-
   // Trigger toast with robust timer reset
   const triggerAuthToast = () => {
     if (toastTimer) clearTimeout(toastTimer);
+    setToastVariant("auth");
+    setShowAuthToast(true);
+    const timer = setTimeout(() => setShowAuthToast(false), 3000);
+    setToastTimer(timer);
+  };
+
+  const triggerDemoToast = () => {
+    if (toastTimer) clearTimeout(toastTimer);
+    setToastVariant("demo");
     setShowAuthToast(true);
     const timer = setTimeout(() => setShowAuthToast(false), 3000);
     setToastTimer(timer);
@@ -288,9 +306,18 @@ export default function AuraCard({
              className="absolute inset-[4%] z-[100] flex flex-col items-center justify-center border-2 border-neon-purple rounded-[3rem] p-6 text-center backdrop-blur-3xl shadow-[0_0_60px_rgba(168,85,247,0.5)] pointer-events-auto"
            >
              <div className="text-4xl mb-4 drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">🤠⚡</div>
-             <h4 className="text-xl font-black italic tracking-tighter mb-2 text-white">ТОРМОЗИ, КОВБОЙ!</h4>
-             <p className="text-[11px] text-white/60 font-bold uppercase tracking-[0.3em] leading-relaxed">Сначала зарегистрируйся</p>
-             <button onClick={() => router.push('/login')} className="mt-8 w-full py-4 rounded-2xl bg-neon-purple text-black font-black text-[11px] uppercase tracking-widest hover:bg-white transition-all shadow-[0_0_20px_rgba(168,85,247,0.4)]">ВОЙТИ ⚡</button>
+             <h4 className="text-xl font-black italic tracking-tighter mb-2 text-white">
+               {toastVariant === "auth" ? "ТОРМОЗИ, КОВБОЙ!" : "ЭТО ДЕМО-КАРТОЧКА"}
+             </h4>
+             <p className="text-[11px] text-white/60 font-bold uppercase tracking-[0.3em] leading-relaxed">
+               {toastVariant === "auth" ? "Сначала зарегистрируйся" : "Голосование доступно на реальных профилях"}
+             </p>
+             <button
+               onClick={() => router.push(toastVariant === "auth" ? "/login" : "/profile")}
+               className="mt-8 w-full py-4 rounded-2xl bg-neon-purple text-black font-black text-[11px] uppercase tracking-widest hover:bg-white transition-all shadow-[0_0_20px_rgba(168,85,247,0.4)]"
+             >
+               {toastVariant === "auth" ? "ВОЙТИ ⚡" : "ОТКРЫТЬ ПРОФИЛЬ ⚡"}
+             </button>
            </motion.div>
          )}
        </AnimatePresence>

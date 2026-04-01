@@ -187,6 +187,12 @@ export default function LandingPage() {
     setMounted(true);
     let isActive = true;
 
+    void supabase.auth.getUser().then(({ data }) => {
+      if (isActive) {
+        setUser(data.user ?? null);
+      }
+    });
+
     const loadLeaderboardPreview = async () => {
       try {
         const response = await fetch("/api/leaderboard/preview");
