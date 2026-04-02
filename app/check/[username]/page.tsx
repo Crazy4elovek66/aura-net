@@ -41,17 +41,30 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
     notFound();
   }
 
-  const { count: votesUp } = await supabase
-    .from("votes")
-    .select("*", { count: "exact", head: true })
-    .eq("target_id", profile.id)
-    .eq("vote_type", "up");
+  const existingVotePromise = currentUser
+    ? supabase
+        .from("votes")
+        .select("id")
+        .eq("voter_id", currentUser.id)
+        .eq("target_id", profile.id)
+        .maybeSingle()
+    : Promise.resolve({ data: null as { id: string } | null, error: null });
 
-  const { count: votesDown } = await supabase
-    .from("votes")
-    .select("*", { count: "exact", head: true })
-    .eq("target_id", profile.id)
-    .eq("vote_type", "down");
+  const [votesUpResult, votesDownResult, existingVoteResult] = await Promise.all([
+    supabase
+      .from("votes")
+      .select("*", { count: "exact", head: true })
+      .eq("target_id", profile.id)
+      .eq("vote_type", "up"),
+    supabase
+      .from("votes")
+      .select("*", { count: "exact", head: true })
+      .eq("target_id", profile.id)
+      .eq("vote_type", "down"),
+    existingVotePromise,
+  ]);
+
+  const hasVoted = Boolean(existingVoteResult.data);
 
   return (
     <div className="min-h-screen bg-background text-white font-unbounded relative overflow-hidden">
@@ -73,13 +86,14 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
             displayName={profile.display_name || profile.username}
             avatarUrl={profile.avatar_url}
             auraPoints={profile.aura_points}
-            totalVotesUp={votesUp || 0}
-            totalVotesDown={votesDown || 0}
+            totalVotesUp={votesUpResult.count || 0}
+            totalVotesDown={votesDownResult.count || 0}
             profileId={profile.id}
             isOwner={currentUser?.id === profile.id}
             status={profile.status}
             specialCard={profile.special_card}
             canManageSpecialCard={canManageSpecialCard}
+            hasVoted={hasVoted}
           />
         </main>
       </div>

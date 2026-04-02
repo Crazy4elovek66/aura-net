@@ -73,33 +73,46 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Голосовать за себя нельзя" }, { status: 400 });
   }
 
+  const { data: existingVote, error: existingVoteError } = await supabase
+    .from("votes")
+    .select("id")
+    .eq("voter_id", user.id)
+    .eq("target_id", targetId)
+    .maybeSingle();
+
+  if (existingVoteError) {
+    return NextResponse.json({ error: "Не удалось проверить предыдущий голос" }, { status: 500 });
+  }
+
+  if (existingVote) {
+    return NextResponse.json({ error: "Ты уже голосовал за этот профиль" }, { status: 400 });
+  }
+
   const { start, end } = getUtcDayWindow();
   const dayStartIso = start.toISOString();
   const dayEndIso = end.toISOString();
 
-  const [regularVotesResult, anonymousVotesResult] = await Promise.all([
-    supabase
-      .from("votes")
-      .select("id", { count: "exact", head: true })
-      .eq("voter_id", user.id)
-      .eq("is_anonymous", false)
-      .gte("created_at", dayStartIso)
-      .lt("created_at", dayEndIso),
-    supabase
-      .from("votes")
-      .select("id", { count: "exact", head: true })
-      .eq("voter_id", user.id)
-      .eq("is_anonymous", true)
-      .gte("created_at", dayStartIso)
-      .lt("created_at", dayEndIso),
-  ]);
+  const { data: todayVotes, error: todayVotesError } = await supabase
+    .from("votes")
+    .select("is_anonymous")
+    .eq("voter_id", user.id)
+    .gte("created_at", dayStartIso)
+    .lt("created_at", dayEndIso);
 
-  if (regularVotesResult.error || anonymousVotesResult.error) {
+  if (todayVotesError) {
     return NextResponse.json({ error: "Не удалось проверить дневные лимиты" }, { status: 500 });
   }
 
-  const regularVotesToday = regularVotesResult.count ?? 0;
-  const anonymousVotesToday = anonymousVotesResult.count ?? 0;
+  let regularVotesToday = 0;
+  let anonymousVotesToday = 0;
+
+  for (const vote of todayVotes || []) {
+    if (vote.is_anonymous) {
+      anonymousVotesToday += 1;
+    } else {
+      regularVotesToday += 1;
+    }
+  }
 
   if (isAnonymous && anonymousVotesToday >= ANONYMOUS_VOTE_DAILY_LIMIT) {
     return NextResponse.json(

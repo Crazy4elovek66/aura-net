@@ -43,6 +43,8 @@ interface UniversalCreatorCardProps {
     // Voting Props
     onAuraPlus?: () => void;
     onAuraMinus?: () => void;
+    votePendingType?: "up" | "down" | null;
+    hasVoted?: boolean;
 }
 
 
@@ -84,6 +86,8 @@ export default function UniversalCreatorCard({
    statusClassName,
    onAuraPlus,
    onAuraMinus,
+   votePendingType = null,
+   hasVoted = false,
 }: UniversalCreatorCardProps) {
    // Dynamic Styling based on Tier
    const isSigma = tier === 'SIGMA';
@@ -97,6 +101,8 @@ export default function UniversalCreatorCard({
     const primaryGlow = glowColor;
     const auraPoints = parseFloat(data.auraPoints.replace(/\s/g, '').replace(',', '.')) * (data.auraPoints.includes('K') ? 1000 : 1);
     const emoji = isAdmin ? "👑" : isResonance ? "🧭" : getAuraEmoji(auraPoints);
+    const voteInFlight = votePendingType !== null;
+    const voteLocked = hasVoted || voteInFlight;
     
     // Default Tier Emojis for the "Box" if no avatar
     const defaultTierEmoji = isAdmin ? "👑" : isResonance ? "🧭" : getAuraEmoji(auraPoints);
@@ -353,19 +359,36 @@ export default function UniversalCreatorCard({
 
                {/* Footer Actions (Conditional) */}
                {!isOwner && (
-                 <div className="grid grid-cols-2 gap-[0.6em]">
+                 <div className="space-y-[0.5em]">
+                    <div className="grid grid-cols-2 gap-[0.6em]">
                     <button 
                        onClick={onAuraPlus}
-                       className="py-[0.8em] rounded-[1.2em] border-2 border-neon-green/20 bg-neon-green/5 text-neon-green font-black text-[0.7em] uppercase tracking-[0.2em] flex items-center justify-center gap-[0.3em] hover:bg-neon-green/10 transition-all active:scale-95 shadow-lg backdrop-blur-sm"
+                       disabled={voteLocked || !onAuraPlus}
+                       className={`py-[0.8em] rounded-[1.2em] border-2 border-neon-green/20 bg-neon-green/5 text-neon-green font-black text-[0.7em] uppercase tracking-[0.2em] flex items-center justify-center gap-[0.3em] transition-all shadow-lg backdrop-blur-sm ${
+                        voteLocked || !onAuraPlus
+                          ? "opacity-60 cursor-not-allowed"
+                          : "hover:bg-neon-green/10 active:scale-95"
+                       }`}
                     >
-                       <span className="text-[1.4em]">⚡</span> АУРА+
+                       <span className="text-[1.4em]">⚡</span> {votePendingType === "up" ? "ОБРАБОТКА..." : "АУРА+"}
                     </button>
                     <button 
                        onClick={onAuraMinus}
-                       className="py-[0.8em] rounded-[1.2em] border-2 border-neon-pink/20 bg-neon-pink/5 text-neon-pink font-black text-[0.7em] uppercase tracking-[0.2em] flex items-center justify-center gap-[0.3em] hover:bg-neon-pink/10 transition-all active:scale-95 shadow-lg backdrop-blur-sm"
+                       disabled={voteLocked || !onAuraMinus}
+                       className={`py-[0.8em] rounded-[1.2em] border-2 border-neon-pink/20 bg-neon-pink/5 text-neon-pink font-black text-[0.7em] uppercase tracking-[0.2em] flex items-center justify-center gap-[0.3em] transition-all shadow-lg backdrop-blur-sm ${
+                        voteLocked || !onAuraMinus
+                          ? "opacity-60 cursor-not-allowed"
+                          : "hover:bg-neon-pink/10 active:scale-95"
+                       }`}
                     >
-                       <span className="text-[1.4em]">💀</span> АУРА-
+                       <span className="text-[1.4em]">💀</span> {votePendingType === "down" ? "ОБРАБОТКА..." : "АУРА-"}
                     </button>
+                    </div>
+                    {hasVoted && (
+                      <p className="text-center text-[0.55em] uppercase tracking-[0.18em] text-white/45 font-black">
+                        Голос уже учтен
+                      </p>
+                    )}
                  </div>
                )}
             </div>

@@ -22,6 +22,7 @@ interface AuraCardProps {
   specialCard?: string | null;
   canManageSpecialCard?: boolean;
   isBoosted?: boolean;
+  hasVoted?: boolean;
 }
 
 const supabase = createClient();
@@ -36,12 +37,15 @@ export default function AuraCard({
   profileId,
   status: initialStatus,
   specialCard: initialSpecialCard = null,
+  hasVoted: initialHasVoted = false,
   canManageSpecialCard = false,
   isOwner = false,
 }: AuraCardProps & { isOwner?: boolean }) {
   const [auraPoints, setAuraPoints] = useState(initialAura);
-  const upVotes = initialUp;
-  const downVotes = initialDown;
+  const [upVotes, setUpVotes] = useState(initialUp);
+  const [downVotes, setDownVotes] = useState(initialDown);
+  const [votePendingType, setVotePendingType] = useState<"up" | "down" | null>(null);
+  const [hasVoted, setHasVoted] = useState(initialHasVoted);
   const [isEditing, setIsEditing] = useState(false);
   const [currentDisplayName, setCurrentDisplayName] = useState(displayName);
   const [editValue, setEditValue] = useState(displayName);
@@ -104,12 +108,43 @@ export default function AuraCard({
     setLoading(false);
   };
 
-  const handleVote = async (type: 'up' | 'down') => {
-    if (loading) return;
-    setLoading(true);
+  const isDuplicateVoteError = (message: string) => {
+    const normalized = message.toLowerCase();
+    return normalized.includes("уже голосовал") || normalized.includes("already voted");
+  };
+
+  const applyConfirmedVote = (type: "up" | "down", rawAuraChange: unknown) => {
+    const fallbackAuraChange = type === "up" ? 10 : -10;
+    const parsedAuraChange = typeof rawAuraChange === "number" ? rawAuraChange : Number(rawAuraChange);
+    const confirmedAuraChange = Number.isFinite(parsedAuraChange) ? parsedAuraChange : fallbackAuraChange;
+
+    setAuraPoints((prev) => Math.max(0, prev + confirmedAuraChange));
+
+    if (type === "up") {
+      setUpVotes((prev) => prev + 1);
+    } else {
+      setDownVotes((prev) => prev + 1);
+    }
+
+    setHasVoted(true);
+  };
+
+  const handleVote = async (type: "up" | "down") => {
+    if (votePendingType || hasVoted || loading) return;
+
+    setVotePendingType(type);
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      const isCheckPage = typeof window !== 'undefined' && window.location.pathname.includes('/check/');
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      let currentUser = session?.user ?? null;
+      if (!currentUser) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        currentUser = user;
+      }
+      const isCheckPage = typeof window !== "undefined" && window.location.pathname.includes("/check/");
 
       if (!profileId) {
         if (!currentUser) {
@@ -121,50 +156,57 @@ export default function AuraCard({
       }
 
       if (!currentUser) {
-        if (isCheckPage) {
-          // Анонимный вход + голос (для конверсии)
-          const { error: authError } = await supabase.auth.signInAnonymously();
-          if (authError) throw authError;
-          
-          const voteResponse = await fetch("/api/vote", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ targetId: profileId, type, isAnonymous: true }),
-          });
-
-          const votePayload = await voteResponse.json().catch(() => ({}));
-
-          if (!voteResponse.ok) {
-            alert(votePayload.error || "Не удалось отправить голос");
-            return;
-          }
-
-          // Сразу после голоса — "Притормози ковбой" (призыв к регистрации)
+        if (!isCheckPage) {
           triggerAuthToast();
-          router.refresh();
-        } else {
-          // На главной — просто блокируем
-          triggerAuthToast();
+          return;
         }
-      } else {
-        // Залогинен — обычный голос
-        const res = await fetch("/api/vote", {
+
+        const { error: authError } = await supabase.auth.signInAnonymously();
+        if (authError) throw authError;
+
+        const voteResponse = await fetch("/api/vote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ targetId: profileId, type }),
+          body: JSON.stringify({ targetId: profileId, type, isAnonymous: true }),
         });
 
-        const payload = await res.json().catch(() => ({}));
-        if (res.ok) {
-          router.refresh();
-        } else {
-          alert(payload.error || "Не удалось отправить голос");
+        const votePayload = await voteResponse.json().catch(() => ({}));
+        if (!voteResponse.ok) {
+          const errorMessage = String(votePayload.error || "Не удалось отправить голос");
+          if (isDuplicateVoteError(errorMessage)) {
+            setHasVoted(true);
+          }
+          alert(errorMessage);
+          return;
         }
+
+        applyConfirmedVote(type, votePayload.newAuraChange);
+        triggerAuthToast();
+        return;
       }
-    } catch (e) {
-      console.error(e);
+
+      const response = await fetch("/api/vote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetId: profileId, type }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const errorMessage = String(payload.error || "Не удалось отправить голос");
+        if (isDuplicateVoteError(errorMessage)) {
+          setHasVoted(true);
+        }
+        alert(errorMessage);
+        return;
+      }
+
+      applyConfirmedVote(type, payload.newAuraChange);
+    } catch (error) {
+      console.error(error);
+      alert("Сетевая ошибка. Попробуй еще раз.");
     } finally {
-      setLoading(false);
+      setVotePendingType(null);
     }
   };
 
@@ -204,7 +246,6 @@ export default function AuraCard({
       }
 
       setSpecialCard(payload.specialCard ?? null);
-      router.refresh();
     } catch {
       alert("Ошибка сети");
     } finally {
@@ -274,6 +315,8 @@ export default function AuraCard({
           statusClassName={isSpecialAdmin ? 'architect-text-glow' : isResonance ? 'resonance-text-glow' : ''}
           onAuraPlus={() => handleVote('up')}
           onAuraMinus={() => handleVote('down')}
+          votePendingType={votePendingType}
+          hasVoted={hasVoted}
        >
           {/* TIER-SPECIFIC BACKGROUNDS (PRESERVING STYLE) */}
           <div className="absolute inset-0 z-0 pointer-events-none">
