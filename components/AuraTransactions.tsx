@@ -1,4 +1,4 @@
-interface AuraTransaction {
+﻿interface AuraTransaction {
   id: string;
   amount: number;
   type: string;
@@ -13,6 +13,9 @@ const TYPE_LABELS: Record<string, string> = {
   vote_up: "Получен плюс",
   vote_down: "Получен минус",
   daily_reward: "Ежедневная награда",
+  streak_milestone: "Этап серии",
+  weekly_activity_reward: "Недельная награда",
+  achievement_reward: "Награда за достижение",
 };
 
 function extractFirstNumber(value: string | null): number | null {
@@ -30,6 +33,19 @@ function formatDescription(tx: AuraTransaction) {
   if (tx.type === "daily_reward") {
     const day = extractFirstNumber(tx.description);
     return day ? `Награда за серию: день ${day}` : "Награда за серию";
+  }
+
+  if (tx.type === "streak_milestone") {
+    const days = extractFirstNumber(tx.description);
+    return days ? `Этап серии: ${days} дн.` : "Этап серии";
+  }
+
+  if (tx.type === "weekly_activity_reward") {
+    return tx.description || "Награда за недельную активность";
+  }
+
+  if (tx.type === "achievement_reward") {
+    return tx.description || "Награда за достижение";
   }
 
   return tx.description || "Без описания";
@@ -84,4 +100,3 @@ export default function AuraTransactions({ transactions }: { transactions: AuraT
     </section>
   );
 }
-

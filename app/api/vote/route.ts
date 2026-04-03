@@ -257,6 +257,32 @@ export async function POST(request: Request) {
     console.error("[Vote API] Failed to write target transaction", targetTransactionError.message);
   }
 
+  if (type === "up") {
+    const { count: upvotesCount, error: upvotesCountError } = await admin
+      .from("votes")
+      .select("id", { count: "exact", head: true })
+      .eq("target_id", targetId)
+      .eq("vote_type", "up");
+
+    if (upvotesCountError) {
+      console.error("[Vote API] Failed to count upvotes for achievement", upvotesCountError.message);
+    } else if ((upvotesCount || 0) >= 10) {
+      const { error: achievementError } = await admin.rpc("grant_achievement", {
+        p_profile_id: targetId,
+        p_achievement_key: "upvotes_received_10",
+        p_context: {
+          source: "vote",
+          upvotesCount: Number(upvotesCount || 0),
+          voteId: createdVote.id,
+        },
+      });
+
+      if (achievementError) {
+        console.error("[Vote API] Failed to grant achievement", achievementError.message);
+      }
+    }
+  }
+
   const comments = type === "up" ? AI_COMMENTS.up : AI_COMMENTS.down;
   const aiComment = comments[Math.floor(Math.random() * comments.length)];
 

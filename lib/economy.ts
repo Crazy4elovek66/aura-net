@@ -8,6 +8,14 @@ export const BOOST_DURATION_MINUTES = 15;
 export const DAILY_REWARD_BASE = 20;
 export const DAILY_REWARD_STEP = 5;
 export const DAILY_REWARD_CAP = 50;
+export const STREAK_MILESTONE_REWARDS = [
+  { days: 3, reward: 5 },
+  { days: 7, reward: 10 },
+  { days: 14, reward: 20 },
+  { days: 30, reward: 40 },
+] as const;
+export const WEEKLY_ACTIVITY_TARGET_DAYS = 5;
+export const WEEKLY_ACTIVITY_REWARD = 15;
 
 export interface DailyRewardStatus {
   canClaim: boolean;
