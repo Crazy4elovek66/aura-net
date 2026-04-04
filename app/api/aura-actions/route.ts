@@ -1,12 +1,4 @@
-import {
-  CARD_ACCENT_COST,
-  CARD_ACCENT_DURATION_HOURS,
-  CARD_ACCENT_VARIANTS,
-  DECAY_SHIELD_COST,
-  DECAY_SHIELD_DURATION_HOURS,
-  STREAK_RESCUE_COOLDOWN_HOURS,
-  STREAK_RESCUE_COST,
-} from "@/lib/economy";
+﻿import { CARD_ACCENT_VARIANTS } from "@/lib/economy";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -33,6 +25,13 @@ interface CardAccentRow {
 function mapRpcError(message: string) {
   const normalized = message.toLowerCase();
 
+  if (normalized.includes("could not find the function") && normalized.includes("schema cache")) {
+    return {
+      status: 501,
+      error: "Функция не найдена в schema cache Supabase. Примени миграции и обнови кэш API.",
+    };
+  }
+
   if (normalized.includes("function") && normalized.includes("does not exist")) {
     return { status: 501, error: "Функция не найдена в БД. Примени актуальные миграции." };
   }
@@ -46,7 +45,7 @@ function mapRpcError(message: string) {
     normalized.includes("on cooldown") ||
     normalized.includes("already active until")
   ) {
-    return { status: 429, error: "Эффект уже активен или ещё на cooldown" };
+    return { status: 429, error: "Эффект уже активен или еще на cooldown" };
   }
 
   if (
@@ -101,8 +100,6 @@ export async function POST(request: Request) {
     const { data, error } = await supabase
       .rpc("purchase_decay_shield", {
         p_profile_id: user.id,
-        p_cost: DECAY_SHIELD_COST,
-        p_duration_hours: DECAY_SHIELD_DURATION_HOURS,
       })
       .single();
 
@@ -125,8 +122,6 @@ export async function POST(request: Request) {
     const { data, error } = await supabase
       .rpc("rescue_streak_with_aura", {
         p_profile_id: user.id,
-        p_cost: STREAK_RESCUE_COST,
-        p_cooldown_hours: STREAK_RESCUE_COOLDOWN_HOURS,
       })
       .single();
 
@@ -160,8 +155,6 @@ export async function POST(request: Request) {
     .rpc("purchase_card_accent", {
       p_profile_id: user.id,
       p_variant: variant,
-      p_cost: CARD_ACCENT_COST,
-      p_duration_hours: CARD_ACCENT_DURATION_HOURS,
     })
     .single();
 
@@ -180,4 +173,3 @@ export async function POST(request: Request) {
     auraLeft: Number(row.aura_left || 0),
   });
 }
-

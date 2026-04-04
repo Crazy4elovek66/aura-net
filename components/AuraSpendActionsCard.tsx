@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   CARD_ACCENT_COST,
@@ -44,6 +44,19 @@ function formatDate(iso: string | null) {
 
 function isActive(iso: string | null) {
   return Boolean(iso);
+}
+
+function getAccentPreviewClass(variant: string) {
+  switch (variant) {
+    case "NEON_EDGE":
+      return "border-fuchsia-300/80 shadow-[0_0_20px_rgba(232,121,249,0.45)]";
+    case "GOLD_PULSE":
+      return "border-amber-300/80 shadow-[0_0_20px_rgba(252,211,77,0.45)]";
+    case "FROST_RING":
+      return "border-cyan-300/80 shadow-[0_0_20px_rgba(103,232,249,0.45)]";
+    default:
+      return "border-white/20";
+  }
 }
 
 export default function AuraSpendActionsCard({ profileId, initialState }: AuraSpendActionsCardProps) {
@@ -207,9 +220,30 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
         </div>
       </div>
 
+      <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Как это выглядит</p>
+        <p className="mt-1 text-[10px] text-white/50">
+          Временные визуальные элементы: «Фокус» в лидерборде и акцент рамки карточки профиля.
+        </p>
+
+        <div className="mt-3 rounded-xl border border-neon-pink/30 bg-neon-pink/5 p-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.08em] text-neon-pink">Фокус</p>
+          <p className="mt-1 text-[10px] text-white/55">Профиль попадает в вкладку «В фокусе» и выделяется меткой времени.</p>
+        </div>
+
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {CARD_ACCENT_VARIANTS.map((variant) => (
+            <div key={`preview-${variant}`} className="rounded-xl border border-white/10 bg-black/30 p-2">
+              <p className="text-[9px] uppercase tracking-[0.08em] text-white/60">Акцент</p>
+              <div className={`mt-2 h-10 rounded-lg border ${getAccentPreviewClass(variant)} bg-white/[0.03]`} />
+              <p className="mt-2 text-[10px] font-black uppercase tracking-[0.08em] text-white/80">{ACCENT_LABELS[variant]}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {success && <p className="mt-3 text-[10px] uppercase tracking-[0.08em] text-neon-green">{success}</p>}
       {error && <p className="mt-3 text-[10px] uppercase tracking-[0.08em] text-neon-pink">{error}</p>}
     </section>
   );
 }
-
