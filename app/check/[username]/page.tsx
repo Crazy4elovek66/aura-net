@@ -1,7 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
-import { notFound } from "next/navigation";
 import AuraCard from "@/components/AuraCard";
 import Background from "@/components/Background";
+import { createClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
 import CheckPageNav from "./CheckPageNav";
 
 interface CheckPageProps {
@@ -11,6 +11,12 @@ interface CheckPageProps {
   searchParams: Promise<{
     returnTo?: string;
   }>;
+}
+
+interface AuraEffectRow {
+  effect_type: "DECAY_SHIELD" | "CARD_ACCENT";
+  effect_variant: string | null;
+  expires_at: string;
 }
 
 export default async function CheckPage({ params, searchParams }: CheckPageProps) {
@@ -23,7 +29,14 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
   } = await supabase.auth.getUser();
 
   const isAuthorizedUser = Boolean(currentUser && !currentUser.is_anonymous);
-  const backFallback: "/" | "/profile" = returnTo === "profile" && isAuthorizedUser ? "/profile" : "/";
+  const backFallback: "/" | "/profile" | "/leaderboard" | "/discover" =
+    returnTo === "profile" && isAuthorizedUser
+      ? "/profile"
+      : returnTo === "leaderboard"
+        ? "/leaderboard"
+        : returnTo === "discover"
+          ? "/discover"
+          : "/";
   let canManageSpecialCard = false;
 
   if (isAuthorizedUser) {
@@ -31,15 +44,13 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
     canManageSpecialCard = Boolean(isAdmin);
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("username", username)
-    .single();
+  const { data: profile } = await supabase.from("profiles").select("*").eq("username", username).single();
 
   if (!profile) {
     notFound();
   }
+
+  const nowIso = new Date().toISOString();
 
   const existingVotePromise = currentUser
     ? supabase
@@ -50,7 +61,7 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
         .maybeSingle()
     : Promise.resolve({ data: null as { id: string } | null, error: null });
 
-  const [votesUpResult, votesDownResult, existingVoteResult] = await Promise.all([
+  const [votesUpResult, votesDownResult, existingVoteResult, activeBoostResult, activeEffectsResult] = await Promise.all([
     supabase
       .from("votes")
       .select("*", { count: "exact", head: true })
@@ -62,9 +73,25 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
       .eq("target_id", profile.id)
       .eq("vote_type", "down"),
     existingVotePromise,
+    supabase
+      .from("boosts")
+      .select("expires_at")
+      .eq("profile_id", profile.id)
+      .gt("expires_at", nowIso)
+      .order("expires_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("aura_effects")
+      .select("effect_type, effect_variant, expires_at")
+      .eq("profile_id", profile.id)
+      .gt("expires_at", nowIso),
   ]);
 
   const hasVoted = Boolean(existingVoteResult.data);
+  const activeEffects = (activeEffectsResult.data as AuraEffectRow[] | null) || [];
+  const decayShieldUntil = activeEffects.find((effect) => effect.effect_type === "DECAY_SHIELD")?.expires_at ?? null;
+  const activeCardAccent = activeEffects.find((effect) => effect.effect_type === "CARD_ACCENT");
 
   return (
     <div className="min-h-screen bg-background text-white font-unbounded relative overflow-hidden">
@@ -94,9 +121,14 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
             specialCard={profile.special_card}
             canManageSpecialCard={canManageSpecialCard}
             hasVoted={hasVoted}
+            spotlightUntil={activeBoostResult.data?.expires_at ?? null}
+            decayShieldUntil={decayShieldUntil}
+            cardAccent={activeCardAccent?.effect_variant ?? null}
+            cardAccentUntil={activeCardAccent?.expires_at ?? null}
           />
         </main>
       </div>
     </div>
   );
 }
+

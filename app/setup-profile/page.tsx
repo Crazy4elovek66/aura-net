@@ -12,6 +12,10 @@ export default function SetupProfilePage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+  const getErrorMessage = (errorValue: unknown) =>
+    errorValue instanceof Error
+      ? errorValue.message
+      : "Ошибка базы данных. Проверь SQL-триггеры!";
 
   // Очищаем поле при первой загрузке, если там дефолтный ник
   useEffect(() => {
@@ -99,8 +103,8 @@ export default function SetupProfilePage() {
 
       // Жесткий редирект
       window.location.replace("/profile");
-    } catch (err: any) {
-      setError(err.message || "Ошибка базы данных. Проверь SQL-триггеры!");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);

@@ -85,7 +85,7 @@ export default function CreatorCard({
           <div className="p-5 rounded-[2rem] bg-white/[0.03] border border-white/10 backdrop-blur-xl relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
             <p className="text-[14px] font-medium leading-relaxed italic text-white/90 text-center">
-              "Создатель этого мира. Каждая искра ауры здесь под моим присмотром."
+              «Создатель этого мира. Каждая искра ауры здесь под моим присмотром.»
             </p>
             <div className="flex justify-center mt-4">
               <div className="px-4 py-1 rounded-full bg-white/5 border border-white/10 flex items-center gap-2">

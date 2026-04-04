@@ -94,7 +94,7 @@ export default function CreatorCardV7({
         {/* Center: Quote */}
         <div className="text-center">
            <p className="text-[14px] font-black italic text-white leading-tight uppercase tracking-[-0.05em] scale-y-150 opacity-80">
-             "Beyond the light, there is only us."
+             «Beyond the light, there is only us.»
            </p>
         </div>
 

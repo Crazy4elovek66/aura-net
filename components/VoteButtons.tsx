@@ -19,6 +19,8 @@ export default function VoteButtons({ targetId, isLoggedIn, canVote }: VoteButto
   const [isAnonymous, setIsAnonymous] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+  const getErrorMessage = (error: unknown) =>
+    error instanceof Error ? error.message : "Сеть приуныла";
 
   const handleVote = async (type: "up" | "down") => {
     setLoading(true);
@@ -44,8 +46,8 @@ export default function VoteButtons({ targetId, isLoggedIn, canVote }: VoteButto
       } else {
         alert(data.error || "Что-то пошло не так...");
       }
-    } catch (err: any) {
-      alert("Ошибка: " + (err.message || "Сеть приуныла"));
+    } catch (err: unknown) {
+      alert("Ошибка: " + getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -124,7 +126,7 @@ export default function VoteButtons({ targetId, isLoggedIn, canVote }: VoteButto
                 <div>
                   <p className="text-[10px] font-black text-neon-purple uppercase tracking-widest mb-1">ИИ-Вердикт</p>
                   <p className="text-sm italic text-foreground leading-relaxed font-medium">
-                    "{aiComment}"
+                    &quot;{aiComment}&quot;
                   </p>
                 </div>
               </div>

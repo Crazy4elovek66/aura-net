@@ -7,10 +7,13 @@ export interface DailyRewardInitialState {
   canClaim: boolean;
   claimedToday: boolean;
   streak: number;
+  projectedStreak?: number;
   rewardToday: number;
   nextReward: number;
   availableAt: string;
   streakWillReset: boolean;
+  weeklyProgressDays?: number;
+  weeklyTargetDays?: number;
 }
 
 interface DailyRewardCardProps {
@@ -26,6 +29,8 @@ interface ClaimBreakdown {
   achievements: number;
   unlockedAchievements: string[];
 }
+
+const STREAK_MILESTONES = [3, 7, 14, 30];
 
 function formatDate(iso: string) {
   if (!iso) return "-";
@@ -47,6 +52,18 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
 
   const capReached = useMemo(() => state.nextReward >= 50, [state.nextReward]);
   const isClaimed = !state.canClaim;
+  const projectedStreak = useMemo(
+    () => Math.max(state.projectedStreak ?? (state.canClaim ? state.streak + 1 : state.streak), state.streak),
+    [state.projectedStreak, state.canClaim, state.streak],
+  );
+  const nextMilestone = useMemo(
+    () => STREAK_MILESTONES.find((milestone) => milestone >= projectedStreak) ?? STREAK_MILESTONES[STREAK_MILESTONES.length - 1],
+    [projectedStreak],
+  );
+  const toNextMilestone = Math.max(nextMilestone - projectedStreak, 0);
+  const weeklyTarget = Math.max(1, Math.floor(state.weeklyTargetDays || 5));
+  const weeklyProgress = Math.min(Math.max(0, Math.floor(state.weeklyProgressDays || 0)), weeklyTarget);
+  const weeklyProgressPercent = Math.round((weeklyProgress / weeklyTarget) * 100);
 
   useEffect(() => {
     return () => {
@@ -109,10 +126,13 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
           canClaim: false,
           claimedToday: true,
           streak,
+          projectedStreak: streak + 1,
           rewardToday: 0,
           nextReward,
           availableAt: data.availableAt || state.availableAt,
           streakWillReset: false,
+          weeklyProgressDays: Math.min((state.weeklyProgressDays || 0) + 1, weeklyTarget),
+          weeklyTargetDays: weeklyTarget,
         });
 
         if (refreshTimeoutRef.current !== null) {
@@ -143,6 +163,9 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
         <div>
           <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Ежедневная награда</h2>
           <p className="text-[11px] text-white/45 mt-1 uppercase tracking-[0.08em]">Серия: {state.streak} дн.</p>
+          <p className="text-[10px] text-white/50 mt-1 uppercase tracking-[0.08em]">
+            Следующий рубеж: {nextMilestone} дн. {toNextMilestone > 0 ? `(+${toNextMilestone})` : "достигнут"}
+          </p>
         </div>
         <div className="text-right">
           <p className="text-[10px] uppercase tracking-[0.12em] text-white/40">Следующая награда</p>
@@ -164,6 +187,49 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
             Серия прервана. После получения начнется с первого дня.
           </p>
         )}
+
+        <div className="mt-3 rounded-xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[10px] uppercase tracking-[0.1em] text-white/50">Этапы серии</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {STREAK_MILESTONES.map((milestone) => {
+              const reached = state.streak >= milestone;
+              const isNext = !reached && milestone === nextMilestone;
+
+              return (
+                <span
+                  key={milestone}
+                  className={[
+                    "rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.1em]",
+                    reached
+                      ? "border-neon-green/45 bg-neon-green/10 text-neon-green"
+                      : isNext
+                        ? "border-neon-purple/45 bg-neon-purple/10 text-neon-purple"
+                        : "border-white/15 bg-white/[0.03] text-white/55",
+                  ].join(" ")}
+                >
+                  {milestone} дн.
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-xl border border-white/10 bg-black/25 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] uppercase tracking-[0.1em] text-white/50">Недельный цикл</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.1em] text-neon-pink">
+              {weeklyProgress}/{weeklyTarget}
+            </p>
+          </div>
+          <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full bg-neon-pink transition-all duration-300" style={{ width: `${weeklyProgressPercent}%` }} />
+          </div>
+          <p className="mt-2 text-[10px] uppercase tracking-[0.08em] text-white/50">
+            {weeklyProgress >= weeklyTarget
+              ? "Недельная цель закрыта. Забирай награду серии ежедневно."
+              : `До недельного бонуса: ещё ${weeklyTarget - weeklyProgress} дней входа.`}
+          </p>
+        </div>
 
         {lastClaim && (
           <div className="mt-2 space-y-1">

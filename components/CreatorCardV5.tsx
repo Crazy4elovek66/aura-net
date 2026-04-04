@@ -15,6 +15,13 @@ export default function CreatorCardV5({
   avatarUrl,
 }: CreatorCardProps) {
   const [mousePos, setMousePos] = useState({ x: 50, y: 50 });
+  const particleTrails = Array.from({ length: 12 }, (_, index) => ({
+    startX: 12 + ((index * 71) % 300),
+    startY: 16 + ((index * 53) % 460),
+    driftY: -40 - (index % 5) * 18,
+    duration: 5 + (index % 5),
+    delay: index * 0.35,
+  }));
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -65,22 +72,22 @@ export default function CreatorCardV5({
 
       {/* 2. Плавающие частицы (Particles) */}
       <div className="absolute inset-0 z-5 pointer-events-none">
-        {[...Array(12)].map((_, i) => (
+        {particleTrails.map((particle, i) => (
           <motion.div
             key={i}
             initial={{ 
-              x: Math.random() * 300, 
-              y: Math.random() * 500,
+              x: particle.startX, 
+              y: particle.startY,
               opacity: 0 
             }}
             animate={{ 
-              y: [null, Math.random() * -100],
+              y: [particle.startY, particle.startY + particle.driftY],
               opacity: [0, 0.4, 0]
             }}
             transition={{ 
-              duration: 5 + Math.random() * 5, 
+              duration: particle.duration, 
               repeat: Infinity,
-              delay: Math.random() * 5
+              delay: particle.delay
             }}
             className="absolute w-1 h-1 bg-white rounded-full blur-[1px]"
           />

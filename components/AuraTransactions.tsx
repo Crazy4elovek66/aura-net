@@ -1,4 +1,4 @@
-﻿interface AuraTransaction {
+interface AuraTransaction {
   id: string;
   amount: number;
   type: string;
@@ -8,7 +8,11 @@
 
 const TYPE_LABELS: Record<string, string> = {
   tax: "Налог",
-  boost: "Буст",
+  boost: "Фокус",
+  spotlight: "Фокус",
+  decay_shield_purchase: "Щит от угасания",
+  streak_save: "Сохранение серии",
+  card_accent_purchase: "Акцент карточки",
   decay: "Угасание ауры",
   vote_up: "Получен плюс",
   vote_down: "Получен минус",
@@ -46,6 +50,22 @@ function formatDescription(tx: AuraTransaction) {
 
   if (tx.type === "achievement_reward") {
     return tx.description || "Награда за достижение";
+  }
+
+  if (tx.type === "spotlight" || tx.type === "boost") {
+    return tx.description || "Активация фокуса";
+  }
+
+  if (tx.type === "decay_shield_purchase") {
+    return tx.description || "Щит от угасания";
+  }
+
+  if (tx.type === "streak_save") {
+    return tx.description || "Сохранение серии";
+  }
+
+  if (tx.type === "card_accent_purchase") {
+    return tx.description || "Визуальный акцент карточки";
   }
 
   return tx.description || "Без описания";

@@ -1,7 +1,6 @@
 "use client";
 
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { useEffect, useState } from "react";
 
 interface CreatorCardProps {
   username: string;
@@ -19,6 +18,12 @@ export default function CreatorCardV6({
 
   const rotateX = useTransform(mouseY, [-400, 400], [10, -10]);
   const rotateY = useTransform(mouseX, [-400, 400], [-10, 10]);
+  const kineticParticles = Array.from({ length: 15 }, (_, index) => ({
+    targetX: `${((index * 37) % 200) - 50}%`,
+    targetY: `${((index * 53) % 200) - 50}%`,
+    duration: 2 + (index % 4) * 0.7,
+    delay: index * 0.4,
+  }));
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -66,7 +71,7 @@ export default function CreatorCardV6({
 
       {/* 2. Кинетические Фтоны (Kinetic Particles) */}
       <div className="absolute inset-0 z-5 pointer-events-none">
-        {[...Array(15)].map((_, i) => (
+        {kineticParticles.map((particle, i) => (
           <motion.div
             key={i}
             initial={{ 
@@ -76,15 +81,15 @@ export default function CreatorCardV6({
               scale: 0
             }}
             animate={{ 
-              x: ["50%", `${Math.random() * 200 - 50}%`],
-              y: ["50%", `${Math.random() * 200 - 50}%`],
+              x: ["50%", particle.targetX],
+              y: ["50%", particle.targetY],
               opacity: [0, 0.8, 0],
               scale: [0, 1, 0]
             }}
             transition={{ 
-              duration: 2 + Math.random() * 3, 
+              duration: particle.duration, 
               repeat: Infinity,
-              delay: i * 0.4,
+              delay: particle.delay,
               ease: "easeOut"
             }}
             className="absolute w-1 h-3 bg-white rounded-full blur-[1px]"

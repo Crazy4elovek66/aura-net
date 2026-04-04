@@ -11,6 +11,7 @@ export interface AuraUser {
   last_decay_at: string;
   daily_streak: number;
   last_reward_at: string | null;
+  last_streak_save_at: string | null;
   created_at: string;
 }
 

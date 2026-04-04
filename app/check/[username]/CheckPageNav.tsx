@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 interface CheckPageNavProps {
   isAuthorized: boolean;
-  backFallback: "/" | "/profile";
+  backFallback: "/" | "/profile" | "/leaderboard" | "/discover";
 }
 
 export default function CheckPageNav({ isAuthorized, backFallback }: CheckPageNavProps) {

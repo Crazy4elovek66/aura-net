@@ -1,7 +1,6 @@
 "use client";
 
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { useEffect, useState } from "react";
 
 interface CreatorCardProps {
   username: string;
@@ -19,6 +18,14 @@ export default function CreatorCardV8({
 
   const rotateX = useTransform(mouseY, [-400, 400], [8, -8]);
   const rotateY = useTransform(mouseX, [-400, 400], [-8, 8]);
+  const silkOffsetX = useTransform(mouseX, [-300, 300], [-24, 24]);
+  const silkOffsetY = useTransform(mouseY, [-300, 300], [-12, 12]);
+  const silkLayers = Array.from({ length: 6 }, (_, index) => ({
+    id: index,
+    duration: 12 + index * 4,
+    delay: index * 2,
+    color: index % 2 === 0 ? "rgba(168,85,247,0.15)" : "rgba(255,255,255,0.08)",
+  }));
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -47,9 +54,9 @@ export default function CreatorCardV8({
     >
       {/* 1. Шёлковые нити (Celestial Silk Layers) */}
       <div className="absolute inset-x-[-20%] inset-y-[-20%] z-0 pointer-events-none overflow-hidden opacity-60">
-        {[...Array(6)].map((_, i) => (
+        {silkLayers.map((layer) => (
           <motion.div
-            key={i}
+            key={layer.id}
             animate={{
               x: [0, 60, -60, 0],
               y: [0, -40, 40, 0],
@@ -57,16 +64,16 @@ export default function CreatorCardV8({
               scale: [1, 1.1, 0.9, 1],
             }}
             transition={{
-              duration: 12 + i * 4,
+              duration: layer.duration,
               repeat: Infinity,
               ease: "easeInOut",
-              delay: i * 2,
+              delay: layer.delay,
             }}
             style={{
-                x: useTransform(mouseX, [-300, 300], [-20 * (i+1), 20 * (i+1)]),
-                y: useTransform(mouseY, [-300, 300], [-10 * (i+1), 10 * (i+1)]),
+                x: silkOffsetX,
+                y: silkOffsetY,
                 filter: "blur(40px)",
-                background: `radial-gradient(ellipse at center, ${i % 2 === 0 ? "rgba(168,85,247,0.15)" : "rgba(255,255,255,0.08)"} 0%, transparent 70%)`
+                background: `radial-gradient(ellipse at center, ${layer.color} 0%, transparent 70%)`
             }}
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200%] h-[15px] skew-x-[-30deg]"
           />
@@ -124,7 +131,7 @@ export default function CreatorCardV8({
                transition={{ duration: 5, repeat: Infinity }}
                className="text-center font-medium text-white/60 text-[13px] leading-relaxed uppercase tracking-widest italic"
             >
-               "Weaving the threads of destiny into the fabric of space."
+               «Weaving the threads of destiny into the fabric of space.»
             </motion.div>
         </div>
 

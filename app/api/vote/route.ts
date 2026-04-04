@@ -283,6 +283,40 @@ export async function POST(request: Request) {
     }
   }
 
+  const notifyPayload = {
+    voteId: createdVote.id,
+    voteType: type,
+    auraChange,
+    voterId: user.id,
+    anonymous: isAnonymous,
+    createdAt: new Date().toISOString(),
+  };
+
+  const notifyResult = await admin.rpc("enqueue_notification_event", {
+    p_profile_id: targetId,
+    p_event_type: "new_vote",
+    p_payload: notifyPayload,
+    p_dedupe_key: `vote:${createdVote.id}`,
+    p_channel: "telegram",
+  });
+
+  if (notifyResult.error) {
+    console.error("[Vote API] Failed to enqueue notification event", notifyResult.error.message);
+  }
+
+  const leaderboardStateResult = await admin.rpc("sync_leaderboard_presence_event", {
+    p_profile_id: targetId,
+  });
+
+  if (leaderboardStateResult.error) {
+    console.error("[Vote API] Failed to sync leaderboard presence", leaderboardStateResult.error.message);
+  }
+
+  const weeklyTitlesRefreshResult = await admin.rpc("refresh_weekly_titles");
+  if (weeklyTitlesRefreshResult.error) {
+    console.error("[Vote API] Failed to refresh weekly titles", weeklyTitlesRefreshResult.error.message);
+  }
+
   const comments = type === "up" ? AI_COMMENTS.up : AI_COMMENTS.down;
   const aiComment = comments[Math.floor(Math.random() * comments.length)];
 

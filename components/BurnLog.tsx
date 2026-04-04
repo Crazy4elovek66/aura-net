@@ -64,7 +64,7 @@ export default function BurnLog({ profileId }: { profileId: string }) {
 
         if (profiles) {
           profileMap = new Map(
-            (profiles as ProfileRow[]).map((profile) => [profile.id, profile.username || profile.display_name || "user"])
+            (profiles as ProfileRow[]).map((profile) => [profile.id, profile.username || profile.display_name || "игрок"])
           );
         }
       }
@@ -92,7 +92,7 @@ export default function BurnLog({ profileId }: { profileId: string }) {
 
   return (
     <div className="w-full mt-4 space-y-2">
-      <h3 className="text-[10px] font-black uppercase text-neon-pink tracking-[0.2em] mb-4">Журнал Сжигания (Oracle)</h3>
+      <h3 className="text-[10px] font-black uppercase text-neon-pink tracking-[0.2em] mb-4">Журнал Сжигания (Оракул)</h3>
       {entries.length === 0 ? (
         <p className="text-xs text-muted italic">Пока никто не рискнул сжечь твою ауру.</p>
       ) : (
@@ -105,7 +105,7 @@ export default function BurnLog({ profileId }: { profileId: string }) {
           >
             <div className="flex flex-col">
               <span className="text-[10px] font-black uppercase tracking-widest text-white/80">
-                {vote.is_anonymous ? "DEEP STATE (Анонимно)" : `@${vote.username || "user"}`}
+                {vote.is_anonymous ? "ТЕНЕВОЙ РЕЖИМ (Анонимно)" : `@${vote.username || "игрок"}`}
               </span>
               <span className="text-[8px] text-muted uppercase">{new Date(vote.created_at).toLocaleString("ru-RU")}</span>
             </div>

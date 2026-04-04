@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { motion, useScroll, useTransform, Variants } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
@@ -158,9 +158,14 @@ interface LandingGrowthLeader extends LandingAuraLeader {
   growthPoints: number;
 }
 
+interface LandingSpotlightLeader extends LandingAuraLeader {
+  spotlightUntil: string;
+}
+
 interface LandingLeaderboardPayload {
   auraLeaders: LandingAuraLeader[];
   growthLeaders: LandingGrowthLeader[];
+  spotlightLeaders: LandingSpotlightLeader[];
 }
 
 interface LandingStatsPayload {
@@ -177,6 +182,7 @@ interface LandingAuthUser {
 const EMPTY_LEADERBOARD: LandingLeaderboardPayload = {
   auraLeaders: [],
   growthLeaders: [],
+  spotlightLeaders: [],
 };
 
 const EMPTY_LANDING_STATS: LandingStatsPayload = {
@@ -226,6 +232,7 @@ export default function LandingPage() {
           setLeaderboardData({
             auraLeaders: payload.auraLeaders || [],
             growthLeaders: payload.growthLeaders || [],
+            spotlightLeaders: payload.spotlightLeaders || [],
           });
         }
       } catch {
@@ -286,7 +293,7 @@ export default function LandingPage() {
          <div className="fixed inset-0 z-[1000] bg-background flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
                <div className="w-10 h-10 border-4 border-neon-purple border-t-transparent rounded-full animate-spin" />
-               <span className="text-[10px] text-neon-purple/50 font-black uppercase tracking-[0.3em]">Loading AURA...</span>
+               <span className="text-[10px] text-neon-purple/50 font-black uppercase tracking-[0.3em]">Грузим ауру...</span>
             </div>
          </div>
        ) : (
@@ -351,16 +358,28 @@ function LandingContent({
   return (
     <div className="relative overflow-hidden animate-in fade-in duration-700">
       {/* Навигация */}
-      <nav className="fixed top-0 left-0 right-0 z-[150] p-6 flex justify-between items-center bg-background/50 backdrop-blur-md border-b border-card-border">
+      <nav className="fixed top-0 left-0 right-0 z-[150] px-6 py-3 flex justify-between items-center bg-background/50 backdrop-blur-md border-b border-card-border">
         <Link href="/" className="text-xl font-bold tracking-tighter">
           <span className="text-neon-purple">AURA</span>
           <span className="text-white/70">.NET</span>
         </Link>
-        <div className="flex gap-4">
+        <div className="flex gap-2 sm:gap-4">
+          <Link
+            href="/leaderboard"
+            className="px-3 py-2 rounded-lg border border-card-border hover:border-neon-purple transition-all text-xs sm:text-sm font-medium text-white/70 hover:text-white"
+          >
+            Гонка ауры
+          </Link>
+          <Link
+            href="/discover"
+            className="px-3 py-2 rounded-lg border border-card-border hover:border-neon-purple transition-all text-xs sm:text-sm font-medium text-white/70 hover:text-white"
+          >
+            Разведка
+          </Link>
           {user ? (
             <Link
               href="/profile"
-              className="px-4 py-2 rounded-lg border border-card-border hover:border-neon-purple transition-all text-sm font-medium"
+              className="px-4 py-2 rounded-lg border border-neon-purple/50 bg-neon-purple/10 text-neon-purple hover:bg-neon-purple/20 transition-all text-sm font-medium"
             >
               Профиль
             </Link>
@@ -400,7 +419,7 @@ function LandingContent({
               transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
               className="w-2 h-2 rounded-full bg-neon-green shadow-[0_0_8px_rgba(57,255,20,0.8)]"
             />
-            Бета — ранний старт в рейтинге
+            Бета — раньше зашел, больше получил
           </span>
         </motion.div>
 
@@ -675,6 +694,7 @@ function LandingContent({
                   subtitle={LANDING_LB_TEXT.teaserSubtitle}
                   auraLeaders={leaderboardData.auraLeaders}
                   growthLeaders={leaderboardData.growthLeaders}
+                  spotlightLeaders={leaderboardData.spotlightLeaders}
                   currentUserId={user?.id || ""}
                 />
               )}

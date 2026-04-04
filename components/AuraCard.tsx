@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { getAuraTier, formatAuraPoints } from "@/lib/aura";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isResonanceSpecialCard } from "@/lib/special-card";
 import { useRouter } from "next/navigation";
@@ -21,11 +21,41 @@ interface AuraCardProps {
   status?: string;
   specialCard?: string | null;
   canManageSpecialCard?: boolean;
-  isBoosted?: boolean;
+  spotlightUntil?: string | null;
+  decayShieldUntil?: string | null;
+  cardAccent?: string | null;
+  cardAccentUntil?: string | null;
   hasVoted?: boolean;
 }
 
 const supabase = createClient();
+
+function isActiveUntil(iso: string | null | undefined): boolean {
+  return Boolean(iso);
+}
+
+function formatEffectUntil(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getCardAccentLabel(value: string | null | undefined): string {
+  switch (value) {
+    case "NEON_EDGE":
+      return "Неоновая грань";
+    case "GOLD_PULSE":
+      return "Золотой импульс";
+    case "FROST_RING":
+      return "Ледяной контур";
+    default:
+      return "Акцент";
+  }
+}
 
 export default function AuraCard({
   username,
@@ -37,6 +67,10 @@ export default function AuraCard({
   profileId,
   status: initialStatus,
   specialCard: initialSpecialCard = null,
+  spotlightUntil = null,
+  decayShieldUntil = null,
+  cardAccent = null,
+  cardAccentUntil = null,
   hasVoted: initialHasVoted = false,
   canManageSpecialCard = false,
   isOwner = false,
@@ -57,10 +91,23 @@ export default function AuraCard({
   const [showBurnLog, setShowBurnLog] = useState(false);
   const [showAuthToast, setShowAuthToast] = useState(false);
   const [toastVariant, setToastVariant] = useState<"auth" | "demo">("auth");
-  const [toastTimer, setToastTimer] = useState<NodeJS.Timeout | null>(null);
+  const isEditingRef = useRef(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const router = useRouter();
   const tier = getAuraTier(auraPoints);
+
+  useEffect(() => {
+    isEditingRef.current = isEditing;
+  }, [isEditing]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
 
   // Реал-тайм обновления
   useEffect(() => {
@@ -73,7 +120,7 @@ export default function AuraCard({
           setAuraPoints(payload.new.aura_points);
           setStatus(payload.new.status);
           setSpecialCard(payload.new.special_card);
-          if (!isEditing) {
+          if (!isEditingRef.current) {
             setCurrentDisplayName(payload.new.display_name);
             setEditValue(payload.new.display_name);
           }
@@ -81,7 +128,7 @@ export default function AuraCard({
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [profileId, isEditing]);
+  }, [profileId]);
 
   const handleUpdateName = async () => {
     if (!profileId || loading || !editValue.trim()) return;
@@ -212,19 +259,17 @@ export default function AuraCard({
 
   // Trigger toast with robust timer reset
   const triggerAuthToast = () => {
-    if (toastTimer) clearTimeout(toastTimer);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastVariant("auth");
     setShowAuthToast(true);
-    const timer = setTimeout(() => setShowAuthToast(false), 3000);
-    setToastTimer(timer);
+    toastTimerRef.current = setTimeout(() => setShowAuthToast(false), 3000);
   };
 
   const triggerDemoToast = () => {
-    if (toastTimer) clearTimeout(toastTimer);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastVariant("demo");
     setShowAuthToast(true);
-    const timer = setTimeout(() => setShowAuthToast(false), 3000);
-    setToastTimer(timer);
+    toastTimerRef.current = setTimeout(() => setShowAuthToast(false), 3000);
   };
 
   const handleResonanceStatus = async (mode: "assign" | "remove") => {
@@ -287,10 +332,15 @@ export default function AuraCard({
     : isResonance
       ? "RESONANCE"
       : (tier.id as "NPC" | "HERO" | "THAT_ONE" | "SIGMA");
+  const spotlightActive = isActiveUntil(spotlightUntil);
+  const decayShieldActive = isActiveUntil(decayShieldUntil);
+  const cardAccentActive = isActiveUntil(cardAccentUntil);
+  const activeCardAccent = cardAccentActive ? cardAccent : null;
 
   return (
     <div id="aura-card-element" className="relative group w-fit mx-auto">
-       <UniversalCreatorCard
+      <div className="relative">
+        <UniversalCreatorCard
           data={universalData}
           tier={tierId}
           isOwner={isOwner}
@@ -300,7 +350,6 @@ export default function AuraCard({
           onEditChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditValue(e.target.value)}
           onEditBlur={handleUpdateName}
           onEditKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleUpdateName()}
-          
           isEditingStatus={isEditingStatus}
           statusValue={statusValue}
           onStatusEditClick={() => isOwner && auraPoints > 500 && setIsEditingStatus(true)}
@@ -317,56 +366,87 @@ export default function AuraCard({
           onAuraMinus={() => handleVote('down')}
           votePendingType={votePendingType}
           hasVoted={hasVoted}
-       >
+        >
           {/* TIER-SPECIFIC BACKGROUNDS (PRESERVING STYLE) */}
           <div className="absolute inset-0 z-0 pointer-events-none">
-             {tier.id === 'SIGMA' && (
-                <>
-                  <div className="absolute inset-0 bg-gradient-to-br from-amber-500/20 via-black to-yellow-900/10" />
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.08)_0%,transparent_70%)]" />
-                  {/* Golden Sweep Effect */}
-                  <div className="absolute inset-0 overflow-hidden">
-                    <motion.div 
-                      initial={{ left: '-100%' }}
-                      animate={{ left: '200%' }}
-                      transition={{ duration: 4, repeat: Infinity, repeatDelay: 6, ease: "easeInOut" }}
-                      className="absolute top-0 bottom-0 w-[50%] skew-x-[-25deg] bg-gradient-to-r from-transparent via-amber-400/20 to-transparent"
-                      style={{ willChange: "transform" }}
-                    />
-                  </div>
-                </>
-             )}
-             {tier.id === 'THAT_ONE' && (
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/15 via-transparent to-indigo-500/5" />
-             )}
-             {tier.id === 'HERO' && (
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/15 via-transparent to-purple-500/5" />
-             )}
-             {isResonance && (
-                <>
-                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/14 via-slate-900/20 to-teal-400/10" />
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(34,211,238,0.14)_0%,transparent_45%)]" />
-                  <div className="absolute inset-0 overflow-hidden">
-                    <motion.div
-                      initial={{ left: "-120%" }}
-                      animate={{ left: "180%" }}
-                      transition={{ duration: 6, repeat: Infinity, repeatDelay: 4, ease: "easeInOut" }}
-                      className="absolute top-0 bottom-0 w-[40%] skew-x-[-18deg] bg-gradient-to-r from-transparent via-cyan-300/15 to-transparent"
-                      style={{ willChange: "transform" }}
-                    />
-                  </div>
-                </>
-             )}
-             {tier.id === 'NPC' && (
-                <div className="absolute inset-0 bg-white/[0.03]" />
-             )}
-             
-             {/* Special Case Logic for Slot 00 (id1) Background */}
-             {isSpecialAdmin && (
-                <Slot00Background />
-             )}
+            {tier.id === 'SIGMA' && (
+              <>
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/20 via-black to-yellow-900/10" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.08)_0%,transparent_70%)]" />
+                {/* Golden Sweep Effect */}
+                <div className="absolute inset-0 overflow-hidden">
+                  <motion.div
+                    initial={{ left: '-100%' }}
+                    animate={{ left: '200%' }}
+                    transition={{ duration: 4, repeat: Infinity, repeatDelay: 6, ease: "easeInOut" }}
+                    className="absolute top-0 bottom-0 w-[50%] skew-x-[-25deg] bg-gradient-to-r from-transparent via-amber-400/20 to-transparent"
+                    style={{ willChange: "transform" }}
+                  />
+                </div>
+              </>
+            )}
+            {tier.id === 'THAT_ONE' && (
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/15 via-transparent to-indigo-500/5" />
+            )}
+            {tier.id === 'HERO' && (
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/15 via-transparent to-purple-500/5" />
+            )}
+            {isResonance && (
+              <>
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/14 via-slate-900/20 to-teal-400/10" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(34,211,238,0.14)_0%,transparent_45%)]" />
+                <div className="absolute inset-0 overflow-hidden">
+                  <motion.div
+                    initial={{ left: "-120%" }}
+                    animate={{ left: "180%" }}
+                    transition={{ duration: 6, repeat: Infinity, repeatDelay: 4, ease: "easeInOut" }}
+                    className="absolute top-0 bottom-0 w-[40%] skew-x-[-18deg] bg-gradient-to-r from-transparent via-cyan-300/15 to-transparent"
+                    style={{ willChange: "transform" }}
+                  />
+                </div>
+              </>
+            )}
+            {tier.id === 'NPC' && (
+              <div className="absolute inset-0 bg-white/[0.03]" />
+            )}
+
+            {/* Special Case Logic for Slot 00 (id1) Background */}
+            {isSpecialAdmin && (
+              <Slot00Background />
+            )}
           </div>
-       </UniversalCreatorCard>
+        </UniversalCreatorCard>
+
+        {activeCardAccent === "NEON_EDGE" && (
+          <div className="pointer-events-none absolute inset-[0.35rem] rounded-[3.3rem] border border-fuchsia-300/80 shadow-[0_0_25px_rgba(232,121,249,0.55)]" />
+        )}
+        {activeCardAccent === "GOLD_PULSE" && (
+          <div className="pointer-events-none absolute inset-[0.35rem] rounded-[3.3rem] border border-amber-300/80 shadow-[0_0_28px_rgba(252,211,77,0.55)] animate-pulse" />
+        )}
+        {activeCardAccent === "FROST_RING" && (
+          <div className="pointer-events-none absolute inset-[0.35rem] rounded-[3.3rem] border border-cyan-300/80 shadow-[0_0_24px_rgba(103,232,249,0.55)]" />
+        )}
+      </div>
+
+      {(spotlightActive || decayShieldActive || cardAccentActive) && (
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          {spotlightActive && (
+            <span className="rounded-full border border-neon-pink/40 bg-neon-pink/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-neon-pink">
+              Фокус до {formatEffectUntil(spotlightUntil)} UTC+0
+            </span>
+          )}
+          {decayShieldActive && (
+            <span className="rounded-full border border-neon-green/40 bg-neon-green/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-neon-green">
+              Щит до {formatEffectUntil(decayShieldUntil)} UTC+0
+            </span>
+          )}
+          {cardAccentActive && (
+            <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-white/85">
+              {getCardAccentLabel(cardAccent)} до {formatEffectUntil(cardAccentUntil)} UTC+0
+            </span>
+          )}
+        </div>
+      )}
 
        {canManageSpecialCard && profileId && !isSpecialAdmin && (
          <div className="mt-4 flex justify-center">

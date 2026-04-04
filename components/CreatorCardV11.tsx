@@ -1,7 +1,6 @@
 "use client";
 
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { useEffect, useState } from "react";
 
 interface CreatorCardProps {
   username: string;
@@ -19,6 +18,22 @@ export default function CreatorCardV11({
 
   const rotateX = useTransform(mouseY, [-400, 400], [12, -12]);
   const rotateY = useTransform(mouseX, [-400, 400], [-12, 12]);
+  const shardOffsetX = useTransform(mouseX, [-300, 300], [-24, 24]);
+  const shardOffsetY = useTransform(mouseY, [-300, 300], [-24, 24]);
+  const prismaticShards = Array.from({ length: 8 }, (_, index) => ({
+    id: index,
+    xDrift: -16 + index * 4,
+    yDrift: (index % 5) * 6 - 12,
+    rotateDrift: (index % 4) * 4 - 6,
+    duration: 10 + index * 1.5,
+    width: `${100 + (index % 5) * 22}%`,
+    height: `${20 + (index % 4) * 10}%`,
+    top: `${index * 12}%`,
+    gradient:
+      index % 2 === 0
+        ? "linear-gradient(90deg, transparent, rgba(236,72,153,0.05), transparent)"
+        : "linear-gradient(90deg, transparent, rgba(6,182,212,0.05), transparent)",
+  }));
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -46,28 +61,29 @@ export default function CreatorCardV11({
       className="relative w-full max-w-[360px] aspect-[9/13] rounded-[4rem] p-10 flex flex-col justify-between overflow-hidden group select-none bg-black shadow-[0_60px_120px_rgba(0,0,0,1)] border border-white/5"
     >
       {/* 1. Стеклянные осколки (Prismatic Glass Shards) */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        {[...Array(8)].map((_, i) => (
+      <motion.div
+        style={{ x: shardOffsetX, y: shardOffsetY }}
+        className="absolute inset-0 z-0 pointer-events-none"
+      >
+        {prismaticShards.map((shard) => (
           <motion.div
-            key={i}
+            key={shard.id}
             animate={{
-              x: [0, Math.random() * 40 - 20, 0],
-              y: [0, Math.random() * 40 - 20, 0],
-              rotate: [0, Math.random() * 20 - 10, 0],
+              x: [0, shard.xDrift, 0],
+              y: [0, shard.yDrift, 0],
+              rotate: [0, shard.rotateDrift, 0],
             }}
             transition={{
-              duration: 10 + Math.random() * 10,
+              duration: shard.duration,
               repeat: Infinity,
               ease: "easeInOut",
             }}
             style={{
-                x: useTransform(mouseX, [-300, 300], [Math.random() * -50, Math.random() * 50]),
-                y: useTransform(mouseY, [-300, 300], [Math.random() * -50, Math.random() * 50]),
-                width: `${100 + Math.random() * 100}%`,
-                height: `${20 + Math.random() * 40}%`,
-                top: `${i * 15}%`,
+                width: shard.width,
+                height: shard.height,
+                top: shard.top,
                 left: "-50%",
-                background: `linear-gradient(90deg, transparent, ${i % 2 === 0 ? "rgba(236,72,153,0.05)" : "rgba(6,182,212,0.05)"}, transparent)`,
+                background: shard.gradient,
                 borderTop: "1px solid rgba(255,255,255,0.03)",
                 borderBottom: "1px solid rgba(255,255,255,0.03)",
                 backdropFilter: "blur(8px)",
@@ -83,7 +99,7 @@ export default function CreatorCardV11({
            transition={{ duration: 4, repeat: Infinity }}
            className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_20%_30%,rgba(236,72,153,0.2),transparent_50%),radial-gradient(circle_at_80%_70%,rgba(6,182,212,0.2),transparent_50%)] blur-[80px]"
         />
-      </div>
+      </motion.div>
 
       {/* 2. Рама с эффектом кристалла */}
       <div className="absolute inset-0 z-10 rounded-[4rem] border border-white/10" />

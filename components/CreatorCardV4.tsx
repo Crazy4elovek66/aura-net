@@ -89,7 +89,7 @@ export default function CreatorCardV4({
           <div className="text-center space-y-4">
             <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
             <p className="text-[14px] font-bold italic text-white/40 leading-relaxed uppercase tracking-tighter scale-y-125">
-              "When the light fades, the aura remains."
+              «When the light fades, the aura remains.»
             </p>
             <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
           </div>

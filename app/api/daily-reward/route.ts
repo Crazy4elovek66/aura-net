@@ -1,4 +1,5 @@
-﻿import { createClient } from "@/lib/supabase/server";
+﻿import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 interface ClaimDailyRewardRow {
@@ -18,6 +19,7 @@ interface ClaimDailyRewardRow {
 
 export async function POST() {
   const supabase = await createClient();
+  let admin: ReturnType<typeof createAdminClient> | null = null;
 
   const {
     data: { user },
@@ -30,6 +32,12 @@ export async function POST() {
 
   if (!user) {
     return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+  }
+
+  try {
+    admin = createAdminClient();
+  } catch {
+    admin = null;
   }
 
   const { data, error } = await supabase.rpc("claim_daily_reward", { p_profile_id: user.id }).single();
@@ -64,10 +72,53 @@ export async function POST() {
   }
 
   const rewardRow = (data || {}) as ClaimDailyRewardRow;
+  const claimed = Boolean(rewardRow.claimed);
+  const availableAt = rewardRow.available_at ?? null;
+
+  if (claimed && availableAt) {
+    const availableMs = new Date(availableAt).getTime();
+    const reminderMs = Number.isFinite(availableMs) ? availableMs - 2 * 60 * 60 * 1000 : Date.now();
+    const reminderIso = new Date(reminderMs).toISOString();
+    const dedupeDate = availableAt.slice(0, 10);
+
+    const reminderEventResult = await supabase.rpc("enqueue_notification_event", {
+      p_profile_id: user.id,
+      p_event_type: "streak_reminder",
+      p_payload: {
+        source: "daily_reward",
+        streak: Number(rewardRow.streak || 0),
+        availableAt,
+      },
+      p_dedupe_key: `streak-reminder:${user.id}:${dedupeDate}`,
+      p_channel: "telegram",
+      p_scheduled_for: reminderIso,
+    });
+
+    if (reminderEventResult.error) {
+      console.error("[DailyReward API] Failed to enqueue streak reminder", reminderEventResult.error.message);
+    }
+  }
+
+  if (claimed) {
+    const leaderboardStateResult = await supabase.rpc("sync_leaderboard_presence_event", {
+      p_profile_id: user.id,
+    });
+
+    if (leaderboardStateResult.error) {
+      console.error("[DailyReward API] Failed to sync leaderboard presence", leaderboardStateResult.error.message);
+    }
+
+    if (admin) {
+      const weeklyTitlesRefreshResult = await admin.rpc("refresh_weekly_titles");
+      if (weeklyTitlesRefreshResult.error) {
+        console.error("[DailyReward API] Failed to refresh weekly titles", weeklyTitlesRefreshResult.error.message);
+      }
+    }
+  }
 
   return NextResponse.json({
     success: true,
-    claimed: Boolean(rewardRow.claimed),
+    claimed,
     reward: Number(rewardRow.reward || 0),
     streak: Number(rewardRow.streak || 0),
     nextReward: Number(rewardRow.next_reward || 0),
