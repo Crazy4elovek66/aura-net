@@ -305,14 +305,24 @@ export default async function ProfilePage() {
       <div className="smart-container px-6 pt-20">
         <header className="flex justify-between items-center mb-8 gap-4 pt-2">
           <h1 className="text-3xl font-black italic uppercase text-white tracking-tighter leading-[1.2]">Профиль</h1>
-          <form action="/api/auth/signout" method="post">
+          <div className="flex items-center gap-2">
+            {canManageSpecialCard ? (
+              <Link
+                href="/admin"
+                className="inline-flex items-center rounded-xl border border-neon-green/25 bg-neon-green/8 px-3 py-2 text-[10px] font-black uppercase tracking-[0.15em] text-neon-green/85 transition-all hover:border-neon-green/45 hover:bg-neon-green/14 hover:text-neon-green"
+              >
+                Admin / Ops
+              </Link>
+            ) : null}
+            <form action="/api/auth/signout" method="post">
             <button
               type="submit"
               className="px-3 py-2 rounded-xl border border-neon-pink/30 text-[10px] font-black uppercase tracking-[0.15em] text-neon-pink/80 hover:text-neon-pink hover:bg-neon-pink/10 transition-all active:scale-95"
             >
               Выйти
             </button>
-          </form>
+            </form>
+          </div>
         </header>
 
         <main className="flex flex-col items-center gap-6 pb-12">
