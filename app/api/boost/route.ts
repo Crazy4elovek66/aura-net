@@ -1,9 +1,23 @@
 import { BOOST_COST, BOOST_DURATION_MINUTES } from "@/lib/economy";
+import { createOpsEvent } from "@/lib/server/ops-events";
+import { getProfileModerationState, isProfileLimited } from "@/lib/server/profile-moderation";
+import { consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
+import { buildRateLimitResponse } from "@/lib/server/route-response";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
+  const burstLimit = consumeRateLimit({
+    key: `boost:ip:${getRequestIp(request)}`,
+    limit: 8,
+    windowMs: 10_000,
+  });
+
+  if (!burstLimit.allowed) {
+    return buildRateLimitResponse("Слишком много попыток включить фокус. Подожди несколько секунд.", burstLimit);
+  }
+
   const supabase = await createClient();
   let admin: ReturnType<typeof createAdminClient>;
 
@@ -33,6 +47,31 @@ export async function POST(request: Request) {
 
   if (!user || user.id !== profileId) {
     return NextResponse.json({ error: "Только владелец может включить фокус" }, { status: 403 });
+  }
+
+  const moderationState = await getProfileModerationState(user.id);
+  if (isProfileLimited(moderationState)) {
+    await createOpsEvent({
+      level: "warn",
+      scope: "boost",
+      eventType: "limited_profile_boost_blocked",
+      profileId: user.id,
+      requestPath: new URL(request.url).pathname,
+      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
+      message: "Boost activation blocked because profile is limited",
+    });
+
+    return NextResponse.json({ error: "РџСЂРѕС„РёР»СЊ РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РµРЅ" }, { status: 403 });
+  }
+
+  const userLimit = consumeRateLimit({
+    key: `boost:user:${user.id}`,
+    limit: 3,
+    windowMs: 10_000,
+  });
+
+  if (!userLimit.allowed) {
+    return buildRateLimitResponse("Слишком много попыток включить фокус. Подожди несколько секунд.", userLimit);
   }
 
   const nowIso = new Date().toISOString();
@@ -95,6 +134,16 @@ export async function POST(request: Request) {
     .single();
 
   if (boostInsertError) {
+    await createOpsEvent({
+      level: "error",
+      scope: "boost",
+      eventType: "boost_insert_failed",
+      profileId,
+      actorId: user.id,
+      requestPath: new URL(request.url).pathname,
+      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
+      message: boostInsertError.message,
+    });
     await admin.rpc("increment_aura", { target_id: profileId, amount: BOOST_COST });
     return NextResponse.json({ error: "Не удалось активировать фокус" }, { status: 500 });
   }
@@ -117,6 +166,19 @@ export async function POST(request: Request) {
   });
 
   if (transactionError) {
+    await createOpsEvent({
+      level: "error",
+      scope: "boost",
+      eventType: "boost_transaction_failed",
+      profileId,
+      actorId: user.id,
+      requestPath: new URL(request.url).pathname,
+      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
+      message: transactionError.message,
+      payload: {
+        boostId: boostRow.id,
+      },
+    });
     await admin.from("boosts").delete().eq("id", boostRow.id);
     await admin.rpc("increment_aura", { target_id: profileId, amount: BOOST_COST });
     return NextResponse.json({ error: "Не удалось записать фокус в историю" }, { status: 500 });

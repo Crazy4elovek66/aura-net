@@ -274,7 +274,7 @@ export default function LandingPage() {
 
     const statsInterval = window.setInterval(() => {
       void loadLandingStats();
-    }, 60_000);
+    }, 90_000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ? { id: session.user.id } : null);

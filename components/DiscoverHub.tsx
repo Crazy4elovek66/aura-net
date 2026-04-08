@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import InlineStateCard from "@/components/ux/InlineStateCard";
 
 interface DiscoverBase {
   id: string;
@@ -54,11 +55,15 @@ export default function DiscoverHub() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<DiscoverPayload | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     const load = async () => {
+      setLoading(true);
+      setError(null);
+
       try {
         const response = await fetch("/api/discover", { cache: "no-store" });
         const data = (await response.json()) as DiscoverPayload & { error?: string };
@@ -72,6 +77,7 @@ export default function DiscoverHub() {
         }
       } catch (loadError) {
         if (isMounted) {
+          setPayload(null);
           setError(loadError instanceof Error ? loadError.message : "Ошибка загрузки");
         }
       } finally {
@@ -86,22 +92,28 @@ export default function DiscoverHub() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [reloadToken]);
 
   if (loading) {
     return (
-      <div className="w-full rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5 animate-pulse">
-        <div className="h-5 w-52 rounded bg-white/10" />
-        <div className="mt-4 h-24 rounded-2xl bg-white/10" />
-      </div>
+      <InlineStateCard
+        eyebrow="Разведка"
+        title="Загружаем витрины"
+        description="Собираем публичные профили, рост и свежие входы."
+      />
     );
   }
 
   if (error || !payload) {
     return (
-      <div className="w-full rounded-3xl border border-neon-pink/30 bg-neon-pink/10 p-5">
-        <p className="text-xs font-black uppercase tracking-[0.12em] text-neon-pink">{error || "Разведка недоступна"}</p>
-      </div>
+      <InlineStateCard
+        eyebrow="Разведка"
+        title="Раздел временно недоступен"
+        description={error || "Не удалось загрузить подборки профилей."}
+        tone="error"
+        actionLabel="Повторить"
+        onAction={() => setReloadToken((current) => current + 1)}
+      />
     );
   }
 
@@ -128,15 +140,19 @@ export default function DiscoverHub() {
 
   return (
     <div className="w-full space-y-5">
-      {aroundYou.length > 0 && (
+      {aroundYou.length > 0 ? (
         <section className="w-full rounded-3xl border border-neon-purple/30 bg-neon-purple/10 backdrop-blur-md p-5">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Кто рядом с тобой</p>
           <div className="mt-3 space-y-2">
-            {aroundYou.map((profile) =>
-              renderProfileRow(profile, `Ранг #${profile.rank}`, "text-neon-purple"),
-            )}
+            {aroundYou.map((profile) => renderProfileRow(profile, `Ранг #${profile.rank}`, "text-neon-purple"))}
           </div>
         </section>
+      ) : (
+        <InlineStateCard
+          eyebrow="Разведка"
+          title="Соседей по гонке пока нет"
+          description="Набор вокруг твоей позиции появится, когда наберётся достаточно активных профилей."
+        />
       )}
 
       <section className="w-full rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
@@ -151,7 +167,7 @@ export default function DiscoverHub() {
               ),
             )
           ) : (
-            <p className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] text-white/60">Пока нет голосов за последние 24 часа.</p>
+            <InlineStateCard title="Пока нет голосов за последние 24 часа" description="Как только начнётся движение, здесь появятся самые обсуждаемые профили." />
           )}
         </div>
       </section>
@@ -164,7 +180,7 @@ export default function DiscoverHub() {
               renderProfileRow(profile, `#${profile.rank} · +${profile.growthPoints} ауры`, "text-neon-green"),
             )
           ) : (
-            <p className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] text-white/60">Пока нет заметного роста за 24 часа.</p>
+            <InlineStateCard title="Рост за 24 часа пока пуст" description="Лента заполнится, когда в системе накопится больше заметных изменений ауры." />
           )}
         </div>
       </section>
@@ -172,8 +188,12 @@ export default function DiscoverHub() {
       <section className="w-full rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Новые профили</p>
         <div className="mt-3 space-y-2">
-          {newProfiles.map((profile) =>
-            renderProfileRow(profile, `Создан: ${formatShortDate(profile.createdAt)} UTC+0`, "text-white/90"),
+          {newProfiles.length ? (
+            newProfiles.map((profile) =>
+              renderProfileRow(profile, `Создан: ${formatShortDate(profile.createdAt)} UTC+0`, "text-white/90"),
+            )
+          ) : (
+            <InlineStateCard title="Новых профилей пока нет" description="Когда пользователи начнут заходить, здесь появится свежий поток регистраций." />
           )}
         </div>
       </section>

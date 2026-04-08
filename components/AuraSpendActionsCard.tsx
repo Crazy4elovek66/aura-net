@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   CARD_ACCENT_COST,
@@ -8,7 +8,8 @@ import {
   STREAK_RESCUE_COST,
 } from "@/lib/economy";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNotice } from "@/components/notice/NoticeProvider";
 
 interface AuraSpendActionsCardProps {
   profileId: string;
@@ -43,7 +44,7 @@ function formatDate(iso: string | null) {
 }
 
 function isActive(iso: string | null) {
-  return Boolean(iso);
+  return Boolean(iso && new Date(iso).getTime() > Date.now());
 }
 
 function getAccentPreviewClass(variant: string) {
@@ -61,21 +62,22 @@ function getAccentPreviewClass(variant: string) {
 
 export default function AuraSpendActionsCard({ profileId, initialState }: AuraSpendActionsCardProps) {
   const router = useRouter();
-
+  const { notify } = useNotice();
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [state, setState] = useState(initialState);
 
-  const shieldActive = useMemo(() => isActive(initialState.decayShieldUntil), [initialState.decayShieldUntil]);
-  const spotlightActive = useMemo(() => isActive(initialState.spotlightUntil), [initialState.spotlightUntil]);
-  const accentActive = useMemo(() => isActive(initialState.cardAccentUntil), [initialState.cardAccentUntil]);
+  useEffect(() => {
+    setState(initialState);
+  }, [initialState]);
+
+  const shieldActive = useMemo(() => isActive(state.decayShieldUntil), [state.decayShieldUntil]);
+  const spotlightActive = useMemo(() => isActive(state.spotlightUntil), [state.spotlightUntil]);
+  const accentActive = useMemo(() => isActive(state.cardAccentUntil), [state.cardAccentUntil]);
 
   const runAction = async (action: PendingAction, variant?: string) => {
     if (!action || pendingAction) return;
 
     setPendingAction(action);
-    setError(null);
-    setSuccess(null);
 
     try {
       if (action === "spotlight") {
@@ -85,14 +87,28 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
           body: JSON.stringify({ profileId }),
         });
 
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          expiresAt?: string | null;
+        };
 
         if (!response.ok) {
-          setError(payload.error || "Не удалось включить фокус");
+          notify({
+            variant: "error",
+            title: "Фокус не включён",
+            message: payload.error || "Не удалось включить фокус.",
+          });
           return;
         }
 
-        setSuccess("Фокус активирован");
+        setState((current) => ({
+          ...current,
+          spotlightUntil: payload.expiresAt || current.spotlightUntil,
+        }));
+        notify({
+          variant: "success",
+          title: "Фокус активирован",
+        });
         router.refresh();
         return;
       }
@@ -103,24 +119,62 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
         body: JSON.stringify({ action, variant }),
       });
 
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        expiresAt?: string | null;
+        cooldownUntil?: string | null;
+        streak?: number;
+        variant?: string | null;
+      };
 
       if (!response.ok) {
-        setError(payload.error || "Не удалось выполнить трату");
+        notify({
+          variant: "error",
+          title: "Трата не выполнена",
+          message: payload.error || "Не удалось выполнить трату.",
+        });
         return;
       }
 
       if (action === "decay_shield") {
-        setSuccess("Щит от угасания активирован");
+        setState((current) => ({
+          ...current,
+          decayShieldUntil: payload.expiresAt || current.decayShieldUntil,
+        }));
+        notify({
+          variant: "success",
+          title: "Щит активирован",
+        });
       } else if (action === "streak_save") {
-        setSuccess("Серия сохранена. Можно забирать дейлик без сброса.");
+        setState((current) => ({
+          ...current,
+          streak: Number(payload.streak || current.streak),
+          canRescueStreak: false,
+          rescueAvailableAt: payload.cooldownUntil || current.rescueAvailableAt,
+        }));
+        notify({
+          variant: "success",
+          title: "Серия сохранена",
+        });
       } else {
-        setSuccess("Визуальный акцент активирован");
+        setState((current) => ({
+          ...current,
+          cardAccent: payload.variant || variant || current.cardAccent,
+          cardAccentUntil: payload.expiresAt || current.cardAccentUntil,
+        }));
+        notify({
+          variant: "success",
+          title: "Акцент активирован",
+        });
       }
 
       router.refresh();
     } catch {
-      setError("Сетевая ошибка. Попробуй снова.");
+      notify({
+        variant: "error",
+        title: "Сетевая ошибка",
+        message: "Не удалось выполнить трату. Попробуй снова.",
+      });
     } finally {
       setPendingAction(null);
     }
@@ -138,7 +192,7 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Щит от угасания (24ч)</p>
               <p className="text-[10px] text-white/50">
                 {shieldActive
-                  ? `Активен до ${formatDate(initialState.decayShieldUntil)} (UTC+0)`
+                  ? `Активен до ${formatDate(state.decayShieldUntil)} (UTC+0)`
                   : "Блокирует ежедневное угасание на ограниченное время."}
               </p>
             </div>
@@ -158,17 +212,17 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Сохранение серии</p>
               <p className="text-[10px] text-white/50">
-                {initialState.canRescueStreak
-                  ? `Доступно сейчас. Текущая серия: ${initialState.streak} дн.`
-                  : initialState.rescueAvailableAt
-                    ? `Перезарядка до ${formatDate(initialState.rescueAvailableAt)} (UTC+0)`
+                {state.canRescueStreak
+                  ? `Доступно сейчас. Текущая серия: ${state.streak} дн.`
+                  : state.rescueAvailableAt
+                    ? `Перезарядка до ${formatDate(state.rescueAvailableAt)} (UTC+0)`
                     : "Доступно только при 1 пропущенном дне и активной серии."}
               </p>
             </div>
             <button
               type="button"
               onClick={() => runAction("streak_save")}
-              disabled={pendingAction !== null || !initialState.canRescueStreak}
+              disabled={pendingAction !== null || !state.canRescueStreak}
               className="rounded-xl border border-neon-purple/40 px-3 py-2 text-[10px] font-black uppercase tracking-[0.15em] text-neon-purple disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {pendingAction === "streak_save" ? "..." : `-${STREAK_RESCUE_COST}`}
@@ -182,7 +236,7 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Фокус (15 мин)</p>
               <p className="text-[10px] text-white/50">
                 {spotlightActive
-                  ? `Активен до ${formatDate(initialState.spotlightUntil)} (UTC+0)`
+                  ? `Активен до ${formatDate(state.spotlightUntil)} (UTC+0)`
                   : "Временная видимость профиля в отдельном блоке лидерборда."}
               </p>
             </div>
@@ -201,7 +255,7 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
           <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Временный акцент карточки (24ч)</p>
           <p className="mt-1 text-[10px] text-white/50">
             {accentActive
-              ? `Активен: ${ACCENT_LABELS[initialState.cardAccent || ""] || initialState.cardAccent} до ${formatDate(initialState.cardAccentUntil)} (UTC+0)`
+              ? `Активен: ${ACCENT_LABELS[state.cardAccent || ""] || state.cardAccent} до ${formatDate(state.cardAccentUntil)} (UTC+0)`
               : "Один контролируемый визуальный эффект без хаоса в стиле."}
           </p>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -241,9 +295,6 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
           ))}
         </div>
       </div>
-
-      {success && <p className="mt-3 text-[10px] uppercase tracking-[0.08em] text-neon-green">{success}</p>}
-      {error && <p className="mt-3 text-[10px] uppercase tracking-[0.08em] text-neon-pink">{error}</p>}
     </section>
   );
 }

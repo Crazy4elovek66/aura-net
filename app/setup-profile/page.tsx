@@ -17,13 +17,6 @@ export default function SetupProfilePage() {
       ? errorValue.message
       : "Ошибка базы данных. Проверь SQL-триггеры!";
 
-  // Очищаем поле при первой загрузке, если там дефолтный ник
-  useEffect(() => {
-    if (username.startsWith("user_") || username.includes("_")) {
-      setUsername("");
-    }
-  }, []);
-
   // Валидация ника (Кириллица, Латиница, Цифры, Подчеркивание)
   const validateUsername = (val: string) => {
     const regex = /^[a-zA-Z0-9а-яА-ЯёЁ_]{3,20}$/;

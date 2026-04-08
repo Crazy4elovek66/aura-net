@@ -18,17 +18,17 @@ export const CARD_ACCENT_DURATION_HOURS = 24;
 export const CARD_ACCENT_VARIANTS = ["NEON_EDGE", "GOLD_PULSE", "FROST_RING"] as const;
 export type CardAccentVariant = (typeof CARD_ACCENT_VARIANTS)[number];
 
-export const DAILY_REWARD_BASE = 20;
-export const DAILY_REWARD_STEP = 5;
-export const DAILY_REWARD_CAP = 50;
+export const DAILY_REWARD_BASE = 8;
+export const DAILY_REWARD_STEP = 2;
+export const DAILY_REWARD_CAP = 18;
 export const STREAK_MILESTONE_REWARDS = [
-  { days: 3, reward: 5 },
-  { days: 7, reward: 10 },
-  { days: 14, reward: 20 },
-  { days: 30, reward: 40 },
+  { days: 3, reward: 4 },
+  { days: 7, reward: 8 },
+  { days: 14, reward: 12 },
+  { days: 30, reward: 20 },
 ] as const;
 export const WEEKLY_ACTIVITY_TARGET_DAYS = 5;
-export const WEEKLY_ACTIVITY_REWARD = 15;
+export const WEEKLY_ACTIVITY_REWARD = 8;
 
 export interface DailyRewardStatus {
   canClaim: boolean;

@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import InlineStateCard from "@/components/ux/InlineStateCard";
 
 type LeaderboardTabKey = "allTime" | "growth7d" | "growth24h" | "spotlight";
 
@@ -82,11 +83,15 @@ export default function LeaderboardHub() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LeaderboardTabKey>("allTime");
   const [payload, setPayload] = useState<LeaderboardPayload | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     const load = async () => {
+      setLoading(true);
+      setError(null);
+
       try {
         const response = await fetch("/api/leaderboard/full", { cache: "no-store" });
         const data = (await response.json()) as LeaderboardPayload & { error?: string };
@@ -100,6 +105,7 @@ export default function LeaderboardHub() {
         }
       } catch (loadError) {
         if (isMounted) {
+          setPayload(null);
           setError(loadError instanceof Error ? loadError.message : "Ошибка загрузки");
         }
       } finally {
@@ -114,13 +120,11 @@ export default function LeaderboardHub() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [reloadToken]);
 
   const tabRows = useMemo(() => {
     if (!payload) {
-      return [] as Array<
-        RankedLeader | GrowthLeader | (SpotlightLeader & { rank: number })
-      >;
+      return [] as Array<RankedLeader | GrowthLeader | (SpotlightLeader & { rank: number })>;
     }
 
     if (activeTab === "allTime") {
@@ -140,23 +144,24 @@ export default function LeaderboardHub() {
 
   if (loading) {
     return (
-      <div className="w-full rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5 animate-pulse">
-        <div className="h-5 w-48 rounded bg-white/10" />
-        <div className="mt-3 h-10 w-full rounded bg-white/10" />
-        <div className="mt-4 space-y-2">
-          <div className="h-12 rounded-xl bg-white/10" />
-          <div className="h-12 rounded-xl bg-white/10" />
-          <div className="h-12 rounded-xl bg-white/10" />
-        </div>
-      </div>
+      <InlineStateCard
+        eyebrow="Лидерборд"
+        title="Загружаем гонку ауры"
+        description="Собираем места, рост и фокус-позиции."
+      />
     );
   }
 
   if (error || !payload) {
     return (
-      <div className="w-full rounded-3xl border border-neon-pink/30 bg-neon-pink/10 p-5">
-        <p className="text-xs font-black uppercase tracking-[0.12em] text-neon-pink">{error || "Лидерборд недоступен"}</p>
-      </div>
+      <InlineStateCard
+        eyebrow="Лидерборд"
+        title="Лидерборд временно недоступен"
+        description={error || "Не удалось загрузить таблицу лидеров."}
+        tone="error"
+        actionLabel="Повторить"
+        onAction={() => setReloadToken((current) => current + 1)}
+      />
     );
   }
 
@@ -164,7 +169,7 @@ export default function LeaderboardHub() {
 
   return (
     <div className="w-full space-y-5">
-      {my && (
+      {my ? (
         <section className="w-full rounded-3xl border border-neon-purple/30 bg-neon-purple/10 backdrop-blur-md p-5">
           <p className="text-[10px] uppercase tracking-[0.14em] text-white/60">Твоя позиция в гонке</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -193,9 +198,7 @@ export default function LeaderboardHub() {
                 <p className="text-[11px] font-black text-neon-green">{my.above.auraPoints}</p>
               </Link>
             ) : (
-              <div className="rounded-2xl border border-neon-green/30 bg-neon-green/10 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.1em] text-neon-green/80">Ты уже на вершине</p>
-              </div>
+              <InlineStateCard title="Ты уже на вершине" description="Выше тебя сейчас никого нет." tone="warning" />
             )}
 
             {my.below ? (
@@ -208,12 +211,16 @@ export default function LeaderboardHub() {
                 <p className="text-[11px] font-black text-neon-pink">{my.below.auraPoints}</p>
               </Link>
             ) : (
-              <div className="rounded-2xl border border-white/15 bg-black/25 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.1em] text-white/55">Снизу никого</p>
-              </div>
+              <InlineStateCard title="Снизу пока никого" description="Рядом с твоей позицией нет следующего профиля." />
             )}
           </div>
         </section>
+      ) : (
+        <InlineStateCard
+          eyebrow="Лидерборд"
+          title="Личный контекст пока недоступен"
+          description="Без полноценной сессии или достаточного объёма данных персональная гонка не считается."
+        />
       )}
 
       {payload.tabs.weeklyTitles.length > 0 && (
@@ -255,40 +262,40 @@ export default function LeaderboardHub() {
         </div>
 
         <div className="mt-4 space-y-2">
-          {tabRows.map((row) => {
-            const growth =
-              "growthPoints" in row && typeof row.growthPoints === "number" ? row.growthPoints : null;
-            const isSpotlight = activeTab === "spotlight";
-            const spotlightUntil =
-              "spotlightUntil" in row && typeof row.spotlightUntil === "string" ? row.spotlightUntil : null;
+          {tabRows.length ? (
+            tabRows.map((row) => {
+              const growth = "growthPoints" in row && typeof row.growthPoints === "number" ? row.growthPoints : null;
+              const isSpotlight = activeTab === "spotlight";
+              const spotlightUntil =
+                "spotlightUntil" in row && typeof row.spotlightUntil === "string" ? row.spotlightUntil : null;
 
-            return (
-              <Link
-                key={`${activeTab}-${row.id}-${row.rank}`}
-                href={`/check/${row.username}?returnTo=leaderboard`}
-                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2 hover:border-neon-purple/40 transition-colors"
-              >
-                <div className="min-w-0 pr-3">
-                  <p className="truncate text-sm text-white/90">
-                    <span className="mr-2 text-white/45">#{row.rank}</span>
-                    {row.displayName}
-                  </p>
-                  {isSpotlight && spotlightUntil ? (
-                    <p className="text-[10px] uppercase tracking-[0.08em] text-white/45">до {formatShortDate(spotlightUntil)} UTC+0</p>
-                  ) : null}
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-black text-neon-green">{row.auraPoints}</p>
-                  {growth !== null ? <p className="text-[10px] font-black text-neon-pink">+{growth}</p> : null}
-                </div>
-              </Link>
-            );
-          })}
-
-          {!tabRows.length && (
-            <p className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] text-white/60">
-              Пока нет данных для этой вкладки.
-            </p>
+              return (
+                <Link
+                  key={`${activeTab}-${row.id}-${row.rank}`}
+                  href={`/check/${row.username}?returnTo=leaderboard`}
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2 hover:border-neon-purple/40 transition-colors"
+                >
+                  <div className="min-w-0 pr-3">
+                    <p className="truncate text-sm text-white/90">
+                      <span className="mr-2 text-white/45">#{row.rank}</span>
+                      {row.displayName}
+                    </p>
+                    {isSpotlight && spotlightUntil ? (
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-white/45">до {formatShortDate(spotlightUntil)} UTC+0</p>
+                    ) : null}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-black text-neon-green">{row.auraPoints}</p>
+                    {growth !== null ? <p className="text-[10px] font-black text-neon-pink">+{growth}</p> : null}
+                  </div>
+                </Link>
+              );
+            })
+          ) : (
+            <InlineStateCard
+              title="Для этой вкладки пока нет данных"
+              description="Как только в системе накопится активность по выбранному срезу, список появится здесь."
+            />
           )}
         </div>
 

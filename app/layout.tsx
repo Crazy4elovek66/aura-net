@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Unbounded } from "next/font/google";
 import Script from "next/script";
+import { NoticeProvider } from "@/components/notice/NoticeProvider";
+import TelegramInit from "@/components/TelegramInit";
 import "./globals.css";
 
 const unbounded = Unbounded({
@@ -21,8 +23,6 @@ export const metadata: Metadata = {
   },
 };
 
-import TelegramInit from "@/components/TelegramInit";
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -37,8 +37,10 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col font-sans mb-safe">
-        <TelegramInit />
-        {children}
+        <NoticeProvider>
+          <TelegramInit />
+          {children}
+        </NoticeProvider>
       </body>
     </html>
   );

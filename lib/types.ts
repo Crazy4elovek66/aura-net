@@ -4,6 +4,9 @@ export interface AuraUser {
   display_name: string;
   avatar_url: string | null;
   telegram_user: string | null;
+  telegram_id?: number | null;
+  invite_code?: string | null;
+  referred_by?: string | null;
   aura_points: number;
   status: string | null;
   special_card: string | null;

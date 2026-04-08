@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DAILY_REWARD_CAP } from "@/lib/economy";
 
 export interface DailyRewardInitialState {
   canClaim: boolean;
@@ -50,7 +51,7 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
   const [error, setError] = useState<string | null>(null);
   const refreshTimeoutRef = useRef<number | null>(null);
 
-  const capReached = useMemo(() => state.nextReward >= 50, [state.nextReward]);
+  const capReached = useMemo(() => state.nextReward >= DAILY_REWARD_CAP, [state.nextReward]);
   const isClaimed = !state.canClaim;
   const projectedStreak = useMemo(
     () => Math.max(state.projectedStreak ?? (state.canClaim ? state.streak + 1 : state.streak), state.streak),
@@ -64,6 +65,10 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
   const weeklyTarget = Math.max(1, Math.floor(state.weeklyTargetDays || 5));
   const weeklyProgress = Math.min(Math.max(0, Math.floor(state.weeklyProgressDays || 0)), weeklyTarget);
   const weeklyProgressPercent = Math.round((weeklyProgress / weeklyTarget) * 100);
+
+  useEffect(() => {
+    setState(initialState);
+  }, [initialState]);
 
   useEffect(() => {
     return () => {

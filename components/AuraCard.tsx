@@ -1,14 +1,13 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { getAuraTier, formatAuraPoints } from "@/lib/aura";
-import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isResonanceSpecialCard } from "@/lib/special-card";
-import { useRouter } from "next/navigation";
+import { useNotice } from "@/components/notice/NoticeProvider";
 import BurnLog from "./BurnLog";
 import UniversalCreatorCard from "./UniversalCreatorCard";
-import React from "react";
 
 interface AuraCardProps {
   username: string;
@@ -89,12 +88,8 @@ export default function AuraCard({
   const [status, setStatus] = useState(initialStatus);
   const [specialCard, setSpecialCard] = useState<string | null>(initialSpecialCard);
   const [showBurnLog, setShowBurnLog] = useState(false);
-  const [showAuthToast, setShowAuthToast] = useState(false);
-  const [toastVariant, setToastVariant] = useState<"auth" | "demo">("auth");
   const isEditingRef = useRef(false);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const router = useRouter();
+  const { notify } = useNotice();
   const tier = getAuraTier(auraPoints);
 
   useEffect(() => {
@@ -102,20 +97,13 @@ export default function AuraCard({
   }, [isEditing]);
 
   useEffect(() => {
-    return () => {
-      if (toastTimerRef.current) {
-        clearTimeout(toastTimerRef.current);
-      }
-    };
-  }, []);
-
-  // Реал-тайм обновления
-  useEffect(() => {
     if (!profileId) return;
 
     const channel = supabase
       .channel(`card-${profileId}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${profileId}` },
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${profileId}` },
         (payload) => {
           setAuraPoints(payload.new.aura_points);
           setStatus(payload.new.status);
@@ -124,34 +112,56 @@ export default function AuraCard({
             setCurrentDisplayName(payload.new.display_name);
             setEditValue(payload.new.display_name);
           }
-        })
+        },
+      )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, [profileId]);
 
   const handleUpdateName = async () => {
     if (!profileId || loading || !editValue.trim()) return;
+
     setLoading(true);
-    const { error } = await supabase.from("profiles").update({ display_name: editValue.trim() }).eq("id", profileId);
+    const nextDisplayName = editValue.trim();
+    const { error } = await supabase.from("profiles").update({ display_name: nextDisplayName }).eq("id", profileId);
+
     if (!error) {
-      setCurrentDisplayName(editValue.trim());
+      setCurrentDisplayName(nextDisplayName);
       setIsEditing(false);
+      setLoading(false);
+      return;
     }
+
+    notify({
+      variant: "error",
+      title: "Имя не обновлено",
+      message: "Не удалось сохранить display name.",
+    });
     setLoading(false);
   };
 
   const handleUpdateStatus = async () => {
     if (!profileId || loading) return;
+
     setLoading(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ status: statusValue.trim() })
-      .eq("id", profileId);
+    const nextStatus = statusValue.trim();
+    const { error } = await supabase.from("profiles").update({ status: nextStatus }).eq("id", profileId);
+
     if (!error) {
-      setStatus(statusValue.trim());
+      setStatus(nextStatus);
       setIsEditingStatus(false);
+      setLoading(false);
+      return;
     }
+
+    notify({
+      variant: "error",
+      title: "Статус не обновлён",
+      message: "Не удалось сохранить статус.",
+    });
     setLoading(false);
   };
 
@@ -184,6 +194,7 @@ export default function AuraCard({
       const {
         data: { session },
       } = await supabase.auth.getSession();
+
       let currentUser = session?.user ?? null;
       if (!currentUser) {
         const {
@@ -191,20 +202,39 @@ export default function AuraCard({
         } = await supabase.auth.getUser();
         currentUser = user;
       }
+
       const isCheckPage = typeof window !== "undefined" && window.location.pathname.includes("/check/");
 
       if (!profileId) {
-        if (!currentUser) {
-          triggerAuthToast();
-        } else {
-          triggerDemoToast();
-        }
+        notify(
+          currentUser
+            ? {
+                variant: "info",
+                title: "Это демо-карточка",
+                message: "Голосование доступно только на реальных публичных профилях.",
+                actionLabel: "Открыть профиль",
+                actionHref: "/profile",
+              }
+            : {
+                variant: "warning",
+                title: "Нужен вход",
+                message: "Для голосования войди через Telegram.",
+                actionLabel: "Войти",
+                actionHref: "/login",
+              },
+        );
         return;
       }
 
       if (!currentUser) {
         if (!isCheckPage) {
-          triggerAuthToast();
+          notify({
+            variant: "warning",
+            title: "Нужен вход",
+            message: "С этой страницы можно голосовать только из авторизованного аккаунта.",
+            actionLabel: "Войти",
+            actionHref: "/login",
+          });
           return;
         }
 
@@ -223,12 +253,22 @@ export default function AuraCard({
           if (isDuplicateVoteError(errorMessage)) {
             setHasVoted(true);
           }
-          alert(errorMessage);
+          notify({
+            variant: "error",
+            title: "Голос не отправлен",
+            message: errorMessage,
+          });
           return;
         }
 
         applyConfirmedVote(type, votePayload.newAuraChange);
-        triggerAuthToast();
+        notify({
+          variant: "success",
+          title: "Анонимный голос принят",
+          message: "Чтобы сохранить прогресс и открыть полный профиль, войди через Telegram.",
+          actionLabel: "Войти",
+          actionHref: "/login",
+        });
         return;
       }
 
@@ -244,32 +284,25 @@ export default function AuraCard({
         if (isDuplicateVoteError(errorMessage)) {
           setHasVoted(true);
         }
-        alert(errorMessage);
+        notify({
+          variant: "error",
+          title: "Голос не отправлен",
+          message: errorMessage,
+        });
         return;
       }
 
       applyConfirmedVote(type, payload.newAuraChange);
     } catch (error) {
       console.error(error);
-      alert("Сетевая ошибка. Попробуй еще раз.");
+      notify({
+        variant: "error",
+        title: "Сетевая ошибка",
+        message: "Не удалось отправить голос. Повтори попытку.",
+      });
     } finally {
       setVotePendingType(null);
     }
-  };
-
-  // Trigger toast with robust timer reset
-  const triggerAuthToast = () => {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToastVariant("auth");
-    setShowAuthToast(true);
-    toastTimerRef.current = setTimeout(() => setShowAuthToast(false), 3000);
-  };
-
-  const triggerDemoToast = () => {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToastVariant("demo");
-    setShowAuthToast(true);
-    toastTimerRef.current = setTimeout(() => setShowAuthToast(false), 3000);
   };
 
   const handleResonanceStatus = async (mode: "assign" | "remove") => {
@@ -286,52 +319,65 @@ export default function AuraCard({
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        alert(payload.error || "Не удалось обновить спец-статус");
+        notify({
+          variant: "error",
+          title: "Спец-статус не обновлён",
+          message: String(payload.error || "Не удалось обновить спец-статус"),
+        });
         return;
       }
 
       setSpecialCard(payload.specialCard ?? null);
+      notify({
+        variant: "success",
+        title: mode === "assign" ? "Резонанс включён" : "Резонанс снят",
+      });
     } catch {
-      alert("Ошибка сети");
+      notify({
+        variant: "error",
+        title: "Ошибка сети",
+        message: "Не удалось обновить спец-статус.",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  // Расчет прогресса до следующего уровня
-  const nextTierPoints = tier.id === 'NPC' ? 501 : tier.id === 'HERO' ? 2001 : tier.id === 'THAT_ONE' ? 5001 : null;
-  const prevTierPoints = tier.id === 'NPC' ? 0 : tier.id === 'HERO' ? 501 : tier.id === 'THAT_ONE' ? 2001 : 5001;
-  
+  const nextTierPoints = tier.id === "NPC" ? 501 : tier.id === "HERO" ? 2001 : tier.id === "THAT_ONE" ? 5001 : null;
+  const prevTierPoints = tier.id === "NPC" ? 0 : tier.id === "HERO" ? 501 : tier.id === "THAT_ONE" ? 2001 : 5001;
+
   let progressToNext = 100;
   if (nextTierPoints) {
     progressToNext = ((auraPoints - prevTierPoints) / (nextTierPoints - prevTierPoints)) * 100;
   }
 
-  // Формируем URL аватарки через прокси для CORS (только для внешних ссылок)
-  const displayAvatarUrl = avatarUrl?.startsWith('http')
+  const displayAvatarUrl = avatarUrl?.startsWith("http")
     ? `/api/proxy/image?url=${encodeURIComponent(avatarUrl)}`
     : avatarUrl;
 
-  // --- UNIVERSAL RENDERING ---
   const universalData = {
     tier: tier.labelRu,
     displayName: currentDisplayName,
-    username: username,
+    username,
     avatarUrl: displayAvatarUrl,
-    verdict: status || (tier.id === 'SIGMA' ? "Легенда зашла в чат." : tier.id === 'THAT_ONE' ? "Тот самый, о ком все говорят." : tier.id === 'HERO' ? "Герой нашего времени." : "НПС не имеют права голоса."),
+    verdict:
+      status ||
+      (tier.id === "SIGMA"
+        ? "Легенда зашла в чат."
+        : tier.id === "THAT_ONE"
+          ? "Тот самый, о ком все говорят."
+          : tier.id === "HERO"
+            ? "Герой нашего времени."
+            : "НПС не имеют права голоса."),
     auraPoints: formatAuraPoints(auraPoints),
     auraPlus: upVotes,
     auraMinus: downVotes,
-    progress: Math.round(Math.max(0, Math.min(100, progressToNext)))
+    progress: Math.round(Math.max(0, Math.min(100, progressToNext))),
   };
 
   const isSpecialAdmin = username === "id1";
   const isResonance = !isSpecialAdmin && isResonanceSpecialCard(specialCard);
-  const tierId = isSpecialAdmin
-    ? "ADMIN"
-    : isResonance
-      ? "RESONANCE"
-      : (tier.id as "NPC" | "HERO" | "THAT_ONE" | "SIGMA");
+  const tierId = isSpecialAdmin ? "ADMIN" : isResonance ? "RESONANCE" : (tier.id as "NPC" | "HERO" | "THAT_ONE" | "SIGMA");
   const spotlightActive = isActiveUntil(spotlightUntil);
   const decayShieldActive = isActiveUntil(decayShieldUntil);
   const cardAccentActive = isActiveUntil(cardAccentUntil);
@@ -349,35 +395,33 @@ export default function AuraCard({
           onNameEditClick={() => isOwner && setIsEditing(true)}
           onEditChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditValue(e.target.value)}
           onEditBlur={handleUpdateName}
-          onEditKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleUpdateName()}
+          onEditKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === "Enter" && handleUpdateName()}
           isEditingStatus={isEditingStatus}
           statusValue={statusValue}
           onStatusEditClick={() => isOwner && auraPoints > 500 && setIsEditingStatus(true)}
           onStatusChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setStatusValue(e.target.value)}
           onStatusBlur={handleUpdateStatus}
           onStatusKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               handleUpdateStatus();
             }
           }}
-          statusClassName={isSpecialAdmin ? 'architect-text-glow' : isResonance ? 'resonance-text-glow' : ''}
-          onAuraPlus={() => handleVote('up')}
-          onAuraMinus={() => handleVote('down')}
+          statusClassName={isSpecialAdmin ? "architect-text-glow" : isResonance ? "resonance-text-glow" : ""}
+          onAuraPlus={() => handleVote("up")}
+          onAuraMinus={() => handleVote("down")}
           votePendingType={votePendingType}
           hasVoted={hasVoted}
         >
-          {/* TIER-SPECIFIC BACKGROUNDS (PRESERVING STYLE) */}
           <div className="absolute inset-0 z-0 pointer-events-none">
-            {tier.id === 'SIGMA' && (
+            {tier.id === "SIGMA" && (
               <>
                 <div className="absolute inset-0 bg-gradient-to-br from-amber-500/20 via-black to-yellow-900/10" />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.08)_0%,transparent_70%)]" />
-                {/* Golden Sweep Effect */}
                 <div className="absolute inset-0 overflow-hidden">
                   <motion.div
-                    initial={{ left: '-100%' }}
-                    animate={{ left: '200%' }}
+                    initial={{ left: "-100%" }}
+                    animate={{ left: "200%" }}
                     transition={{ duration: 4, repeat: Infinity, repeatDelay: 6, ease: "easeInOut" }}
                     className="absolute top-0 bottom-0 w-[50%] skew-x-[-25deg] bg-gradient-to-r from-transparent via-amber-400/20 to-transparent"
                     style={{ willChange: "transform" }}
@@ -385,12 +429,8 @@ export default function AuraCard({
                 </div>
               </>
             )}
-            {tier.id === 'THAT_ONE' && (
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/15 via-transparent to-indigo-500/5" />
-            )}
-            {tier.id === 'HERO' && (
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/15 via-transparent to-purple-500/5" />
-            )}
+            {tier.id === "THAT_ONE" && <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/15 via-transparent to-indigo-500/5" />}
+            {tier.id === "HERO" && <div className="absolute inset-0 bg-gradient-to-br from-purple-500/15 via-transparent to-purple-500/5" />}
             {isResonance && (
               <>
                 <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/14 via-slate-900/20 to-teal-400/10" />
@@ -406,14 +446,8 @@ export default function AuraCard({
                 </div>
               </>
             )}
-            {tier.id === 'NPC' && (
-              <div className="absolute inset-0 bg-white/[0.03]" />
-            )}
-
-            {/* Special Case Logic for Slot 00 (id1) Background */}
-            {isSpecialAdmin && (
-              <Slot00Background />
-            )}
+            {tier.id === "NPC" && <div className="absolute inset-0 bg-white/[0.03]" />}
+            {isSpecialAdmin && <Slot00Background />}
           </div>
         </UniversalCreatorCard>
 
@@ -448,95 +482,71 @@ export default function AuraCard({
         </div>
       )}
 
-       {canManageSpecialCard && profileId && !isSpecialAdmin && (
-         <div className="mt-4 flex justify-center">
-           <button
-             type="button"
-             onClick={() => handleResonanceStatus(isResonance ? "remove" : "assign")}
-             disabled={loading}
-             className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
-               isResonance
-                 ? "border-cyan-300/50 text-cyan-100 bg-cyan-300/10 hover:bg-cyan-300/20"
-                 : "border-white/20 text-white/70 bg-white/5 hover:bg-white/10"
-             } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
-           >
-             {isResonance ? "Снять Резонанс" : "Выдать Резонанс"}
-           </button>
-         </div>
-       )}
+      {canManageSpecialCard && profileId && !isSpecialAdmin && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => handleResonanceStatus(isResonance ? "remove" : "assign")}
+            disabled={loading}
+            className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+              isResonance
+                ? "border-cyan-300/50 text-cyan-100 bg-cyan-300/10 hover:bg-cyan-300/20"
+                : "border-white/20 text-white/70 bg-white/5 hover:bg-white/10"
+            } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            {isResonance ? "Снять Резонанс" : "Выдать Резонанс"}
+          </button>
+        </div>
+      )}
 
-       {/* AUTH TOAST OVERLAY */}
-       <AnimatePresence>
-         {showAuthToast && (
-           <motion.div
-             initial={{ opacity: 0, scale: 0.95 }}
-             animate={{ opacity: 1, scale: 1, backgroundColor: "rgba(0, 0, 0, 0.97)" }}
-             exit={{ opacity: 0, scale: 0.95 }}
-             className="absolute inset-[4%] z-[100] flex flex-col items-center justify-center border-2 border-neon-purple rounded-[3rem] p-6 text-center backdrop-blur-3xl shadow-[0_0_60px_rgba(168,85,247,0.5)] pointer-events-auto"
-           >
-             <div className="text-4xl mb-4 drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">🤠⚡</div>
-             <h4 className="text-xl font-black italic tracking-tighter mb-2 text-white">
-               {toastVariant === "auth" ? "ТОРМОЗИ, КОВБОЙ!" : "ЭТО ДЕМО-КАРТОЧКА"}
-             </h4>
-             <p className="text-[11px] text-white/60 font-bold uppercase tracking-[0.3em] leading-relaxed">
-               {toastVariant === "auth" ? "Сначала зарегистрируйся" : "Голосование доступно на реальных профилях"}
-             </p>
-             <button
-               onClick={() => router.push(toastVariant === "auth" ? "/login" : "/profile")}
-               className="mt-8 w-full py-4 rounded-2xl bg-neon-purple text-black font-black text-[11px] uppercase tracking-widest hover:bg-white transition-all shadow-[0_0_20px_rgba(168,85,247,0.4)]"
-             >
-               {toastVariant === "auth" ? "ВОЙТИ ⚡" : "ОТКРЫТЬ ПРОФИЛЬ ⚡"}
-             </button>
-           </motion.div>
-         )}
-       </AnimatePresence>
-
-       {/* BURN LOG OVERLAY */}
-       <AnimatePresence>
-         {showBurnLog && isOwner && (
-           <motion.div
-             initial={{ height: 0, opacity: 0 }}
-             animate={{ height: 'auto', opacity: 1 }}
-             exit={{ height: 0, opacity: 0 }}
-             className="absolute inset-0 z-50 bg-black/95 backdrop-blur-xl p-6 overflow-y-auto rounded-[3.5rem]"
-           >
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xs font-black uppercase text-neon-pink">Список Сжигателей</h3>
-                <button onClick={() => setShowBurnLog(false)} className="text-white/40 hover:text-white">✕</button>
+      <AnimatePresence>
+        {showBurnLog && isOwner && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="absolute inset-0 z-50 bg-black/95 backdrop-blur-xl p-6 overflow-y-auto rounded-[3.5rem]"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xs font-black uppercase text-neon-pink">Список Сжигателей</h3>
+              <button type="button" onClick={() => setShowBurnLog(false)} className="text-white/40 hover:text-white">
+                ×
+              </button>
+            </div>
+            {tier.id === "THAT_ONE" || tier.id === "SIGMA" || isSpecialAdmin ? (
+              <BurnLog profileId={profileId || ""} />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <p className="text-[10px] font-black uppercase text-white/30 tracking-widest">Доступно только элите</p>
               </div>
-              {(tier.id === 'THAT_ONE' || tier.id === 'SIGMA' || isSpecialAdmin) ? (
-                <BurnLog profileId={profileId || ''} />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                   <p className="text-[10px] font-black uppercase text-white/30 tracking-widest">Доступно только элите</p>
-                </div>
-              )}
-            </motion.div>
-         )}
-       </AnimatePresence>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 function Slot00Background() {
   const codeFragments = ["AURA", "NET", "ROOT", "SYS", "01", "EXEC", "INIT", "NODE", "X8F", "0X0", "SEED", "CORE", "DATA"];
+
   return (
-      <div className="absolute inset-0 opacity-80 pointer-events-none overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_15%,black_85%,transparent)]">
-         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(168,85,247,0.2)_0%,transparent_70%)]" />
-         <div className="relative w-full h-full">
-            {Array.from({ length: 12 }).map((_, i) => (
-               <motion.div
-                  key={i}
-                  initial={{ y: -400 }}
-                  animate={{ y: 1200 }}
-                  transition={{ duration: 25 + (i % 5) * 5, repeat: Infinity, ease: "linear", delay: i * 1.5 }}
-                  className="absolute text-[10px] sm:text-[12px] font-mono font-bold tracking-[0.3em] text-purple-300/40 blur-[1px] [text-shadow:0_0_10px_rgba(168,85,247,0.8)] [writing-mode:vertical-rl]"
-                  style={{ left: `${4 + i * 8}%`, willChange: "transform" }}
-               >
-                  {codeFragments[i % codeFragments.length]} · MATRIX · ESTABLISHED ··· {codeFragments[(i + 3) % codeFragments.length]}
-               </motion.div>
-            ))}
-         </div>
+    <div className="absolute inset-0 opacity-80 pointer-events-none overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_15%,black_85%,transparent)]">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(168,85,247,0.2)_0%,transparent_70%)]" />
+      <div className="relative w-full h-full">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <motion.div
+            key={i}
+            initial={{ y: -400 }}
+            animate={{ y: 1200 }}
+            transition={{ duration: 25 + (i % 5) * 5, repeat: Infinity, ease: "linear", delay: i * 1.5 }}
+            className="absolute text-[10px] sm:text-[12px] font-mono font-bold tracking-[0.3em] text-purple-300/40 blur-[1px] [text-shadow:0_0_10px_rgba(168,85,247,0.8)] [writing-mode:vertical-rl]"
+            style={{ left: `${4 + i * 8}%`, willChange: "transform" }}
+          >
+            {codeFragments[i % codeFragments.length]} · MATRIX · ESTABLISHED ··· {codeFragments[(i + 3) % codeFragments.length]}
+          </motion.div>
+        ))}
       </div>
+    </div>
   );
 }

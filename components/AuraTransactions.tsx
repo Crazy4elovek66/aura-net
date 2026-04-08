@@ -3,6 +3,7 @@ interface AuraTransaction {
   amount: number;
   type: string;
   description: string | null;
+  metadata?: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -20,6 +21,8 @@ const TYPE_LABELS: Record<string, string> = {
   streak_milestone: "Этап серии",
   weekly_activity_reward: "Недельная награда",
   achievement_reward: "Награда за достижение",
+  referral_inviter_reward: "Invite reward",
+  referral_invitee_reward: "Welcome reward",
 };
 
 function extractFirstNumber(value: string | null): number | null {
@@ -28,28 +31,47 @@ function extractFirstNumber(value: string | null): number | null {
   return match ? Number(match[1]) : null;
 }
 
+function getMetadataValue<T>(metadata: Record<string, unknown> | null | undefined, key: string): T | null {
+  if (!metadata || !(key in metadata)) return null;
+  return metadata[key] as T;
+}
+
 function formatDescription(tx: AuraTransaction) {
+  const metadata = tx.metadata || null;
+
   if (tx.type === "decay") {
     const days = extractFirstNumber(tx.description);
     return days && days > 1 ? `Ежедневное угасание: ${days} дн.` : "Ежедневное угасание";
   }
 
   if (tx.type === "daily_reward") {
-    const day = extractFirstNumber(tx.description);
-    return day ? `Награда за серию: день ${day}` : "Награда за серию";
+    const streak = getMetadataValue<number>(metadata, "streak") ?? extractFirstNumber(tx.description);
+    const rewardRole = getMetadataValue<string>(metadata, "rewardRole");
+    return `${streak ? `Серия: день ${streak}` : "Награда за серию"}${rewardRole === "supporting" ? " • вспомогательный income" : ""}`;
   }
 
   if (tx.type === "streak_milestone") {
-    const days = extractFirstNumber(tx.description);
+    const days = getMetadataValue<number>(metadata, "milestoneDays") ?? extractFirstNumber(tx.description);
     return days ? `Этап серии: ${days} дн.` : "Этап серии";
   }
 
   if (tx.type === "weekly_activity_reward") {
-    return tx.description || "Награда за недельную активность";
+    const activeDays = getMetadataValue<number>(metadata, "activeDays");
+    return activeDays ? `Недельная активность: ${activeDays}/7 дней` : tx.description || "Недельная награда";
   }
 
   if (tx.type === "achievement_reward") {
-    return tx.description || "Награда за достижение";
+    const title = getMetadataValue<string>(metadata, "achievementTitle");
+    return title || tx.description || "Награда за достижение";
+  }
+
+  if (tx.type === "referral_inviter_reward") {
+    const inviteeId = getMetadataValue<string>(metadata, "inviteeId");
+    return inviteeId ? `Активирован приглашённый ${inviteeId.slice(0, 8)}` : "Активированный приглашённый";
+  }
+
+  if (tx.type === "referral_invitee_reward") {
+    return "Бонус за вход по приглашению";
   }
 
   if (tx.type === "spotlight" || tx.type === "boost") {
@@ -85,16 +107,18 @@ function amountClass(amount: number) {
 export default function AuraTransactions({ transactions }: { transactions: AuraTransaction[] }) {
   if (!transactions.length) {
     return (
-      <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
-        <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70 mb-3">История ауры</h2>
+      <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-5 backdrop-blur-md">
+        <h2 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-white/70">История ауры</h2>
         <p className="text-xs text-white/50">Пока нет записей. Первая активность появится здесь.</p>
       </section>
     );
   }
 
   return (
-    <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
-      <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70 mb-3">История ауры</h2>
+    <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-5 backdrop-blur-md">
+      <h2 className="mb-1 text-[10px] font-black uppercase tracking-[0.2em] text-white/70">История ауры</h2>
+      <p className="mb-3 text-[11px] text-white/45">Каждое изменение баланса логируется без “магических” скачков.</p>
+
       <div className="space-y-2">
         {transactions.map((tx) => {
           const label = TYPE_LABELS[tx.type] ?? tx.type;
@@ -106,10 +130,8 @@ export default function AuraTransactions({ transactions }: { transactions: AuraT
             >
               <div className="min-w-0 pr-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">{label}</p>
-                <p className="text-[10px] text-white/50 truncate">{formatDescription(tx)}</p>
-                <p className="text-[9px] uppercase tracking-[0.1em] text-white/35">
-                  {new Date(tx.created_at).toLocaleString("ru-RU")}
-                </p>
+                <p className="truncate text-[10px] text-white/55">{formatDescription(tx)}</p>
+                <p className="text-[9px] uppercase tracking-[0.1em] text-white/35">{new Date(tx.created_at).toLocaleString("ru-RU")}</p>
               </div>
 
               <div className={`text-xs font-black ${amountClass(tx.amount)}`}>{formatAmount(tx.amount)}</div>

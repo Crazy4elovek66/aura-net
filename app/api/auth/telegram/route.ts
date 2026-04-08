@@ -1,12 +1,16 @@
-import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { NextResponse } from "next/server";
+import { createOpsEvent } from "@/lib/server/ops-events";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { buildTelegramProfilePatch, type TelegramProfileInput } from "@/lib/auth/telegram-profile";
+import { createClient } from "@supabase/supabase-js";
 
 interface TelegramUserData {
   id: number;
   first_name?: string;
   username?: string;
   photo_url?: string | null;
+  start_param?: string | null;
 }
 
 interface AuthPayload {
@@ -16,7 +20,15 @@ interface AuthPayload {
   first_name?: string;
   username?: string;
   photo_url?: string;
+  next?: string;
   [key: string]: unknown;
+}
+
+interface AuthResult {
+  email: string;
+  password: string;
+  profile: TelegramProfileInput;
+  referralCode: string | null;
 }
 
 function isAlreadyRegisteredError(error: { message?: string; code?: string } | null): boolean {
@@ -37,6 +49,17 @@ function getErrorMessage(error: unknown): string {
   }
 
   return "Unknown error";
+}
+
+function isSafeNextPath(value: string | null | undefined) {
+  return Boolean(value && value.startsWith("/") && !value.startsWith("//"));
+}
+
+function normalizeReferralCode(value: string | null | undefined) {
+  if (!value) return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
+  return normalized.startsWith("ref_") ? normalized.slice(4) : normalized;
 }
 
 function parseTmaUser(data: AuthPayload, botToken: string): TelegramUserData {
@@ -73,6 +96,7 @@ function parseTmaUser(data: AuthPayload, botToken: string): TelegramUserData {
     first_name: tgUser.first_name,
     username: tgUser.username,
     photo_url: tgUser.photo_url || null,
+    start_param: urlParams.get("start_param"),
   };
 }
 
@@ -83,7 +107,7 @@ function parseWidgetUser(data: AuthPayload, botToken: string): TelegramUserData 
   }
 
   const dataCheckString = Object.keys(data)
-    .filter((key) => key !== "hash")
+    .filter((key) => key !== "hash" && key !== "next" && key !== "ref")
     .sort()
     .map((key) => `${key}=${String(data[key] ?? "")}`)
     .join("\n");
@@ -103,7 +127,7 @@ function parseWidgetUser(data: AuthPayload, botToken: string): TelegramUserData 
   };
 }
 
-async function handleTelegramAuth(data: AuthPayload, botToken: string, isTma: boolean) {
+async function handleTelegramAuth(data: AuthPayload, botToken: string, isTma: boolean): Promise<AuthResult> {
   const userData = isTma ? parseTmaUser(data, botToken) : parseWidgetUser(data, botToken);
 
   const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -140,25 +164,111 @@ async function handleTelegramAuth(data: AuthPayload, botToken: string, isTma: bo
   return {
     email,
     password: userPassword,
+    profile: {
+      firstName: userData.first_name,
+      username: userData.username,
+      avatarUrl,
+      telegramId,
+    },
+    referralCode: normalizeReferralCode(userData.start_param),
+  };
+}
+
+async function syncTelegramProfile(authResult: AuthResult, referralCode?: string | null) {
+  const supabase = await createServerClient();
+  const signInResult = await supabase.auth.signInWithPassword({
+    email: authResult.email,
+    password: authResult.password,
+  });
+
+  if (signInResult.error || !signInResult.data.user) {
+    throw signInResult.error || new Error("Sign-in failed");
+  }
+
+  const user = signInResult.data.user;
+  const { data: currentProfile } = await supabase
+    .from("profiles")
+    .select("is_nickname_selected, display_name, avatar_url, telegram_user, telegram_id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const patch = buildTelegramProfilePatch(currentProfile, authResult.profile);
+
+  if (Object.keys(patch).length > 0) {
+    const { error: updateError } = await supabase.from("profiles").update(patch).eq("id", user.id);
+    if (updateError) {
+      console.error("[Auth API] Failed to sync telegram profile", updateError.message);
+      await createOpsEvent({
+        level: "error",
+        scope: "auth",
+        eventType: "telegram_profile_sync_failed",
+        profileId: user.id,
+        message: updateError.message,
+      });
+    }
+  }
+
+  const effectiveReferralCode = normalizeReferralCode(referralCode) || authResult.referralCode;
+  if (effectiveReferralCode) {
+    const { error: referralError } = await supabase.rpc("bind_profile_referral", {
+      p_invitee_id: user.id,
+      p_invite_code: effectiveReferralCode,
+      p_context: {
+        source: "telegram_auth",
+      },
+    });
+
+    if (referralError) {
+      console.error("[Auth API] Failed to bind referral", referralError.message);
+      await createOpsEvent({
+        level: "warn",
+        scope: "auth",
+        eventType: "referral_bind_failed",
+        profileId: user.id,
+        message: referralError.message,
+        payload: {
+          referralCode: effectiveReferralCode,
+        },
+      });
+    }
+  }
+
+  const needsSetup = !currentProfile || currentProfile.is_nickname_selected === false;
+
+  return {
+    needsSetup,
   };
 }
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
+  const { searchParams, origin } = new URL(request.url);
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const nextPath = isSafeNextPath(searchParams.get("next")) ? searchParams.get("next")! : "/profile";
+  const referralCode = normalizeReferralCode(searchParams.get("ref"));
 
   if (!botToken) {
-    return NextResponse.json({ error: "Server config error" }, { status: 500 });
+    return NextResponse.redirect(`${origin}/login?error=config`);
   }
 
   try {
     const data = Object.fromEntries(searchParams.entries()) as AuthPayload;
-    const authData = await handleTelegramAuth(data, botToken, Boolean(data.initData));
-    return NextResponse.json(authData);
+    const authResult = await handleTelegramAuth(data, botToken, false);
+    const { needsSetup } = await syncTelegramProfile(authResult, referralCode);
+    const destination = needsSetup ? "/setup-profile" : nextPath;
+
+    return NextResponse.redirect(new URL(destination, request.url));
   } catch (err: unknown) {
-    const message = getErrorMessage(err);
-    console.error("[Auth API] Error (GET):", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const message = encodeURIComponent(getErrorMessage(err));
+    console.error("[Auth API] Error (GET):", getErrorMessage(err));
+    await createOpsEvent({
+      level: "error",
+      scope: "auth",
+      eventType: "telegram_auth_get_failed",
+      requestPath: new URL(request.url).pathname,
+      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
+      message: getErrorMessage(err),
+    });
+    return NextResponse.redirect(`${origin}/login?error=telegram_widget_failed&reason=${message}`);
   }
 }
 
@@ -172,11 +282,21 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as AuthPayload;
     const authData = await handleTelegramAuth(body, botToken, true);
-    return NextResponse.json(authData);
+    return NextResponse.json({
+      ...authData,
+      referralCode: normalizeReferralCode(typeof body.ref === "string" ? body.ref : null) || authData.referralCode,
+    });
   } catch (err: unknown) {
     const message = getErrorMessage(err);
     console.error("[Auth API] Error (POST):", message);
+    await createOpsEvent({
+      level: "error",
+      scope: "auth",
+      eventType: "telegram_auth_post_failed",
+      requestPath: new URL(request.url).pathname,
+      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
+      message,
+    });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

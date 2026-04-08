@@ -1,5 +1,6 @@
 import AuraCard from "@/components/AuraCard";
 import Background from "@/components/Background";
+import { getProfileModerationState, isProfileLimited } from "@/lib/server/profile-moderation";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import CheckPageNav from "./CheckPageNav";
@@ -47,6 +48,12 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
   const { data: profile } = await supabase.from("profiles").select("*").eq("username", username).single();
 
   if (!profile) {
+    notFound();
+  }
+
+  const moderationState = await getProfileModerationState(profile.id);
+  const isOwner = currentUser?.id === profile.id;
+  if (isProfileLimited(moderationState) && !canManageSpecialCard && !isOwner) {
     notFound();
   }
 
@@ -116,7 +123,7 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
             totalVotesUp={votesUpResult.count || 0}
             totalVotesDown={votesDownResult.count || 0}
             profileId={profile.id}
-            isOwner={currentUser?.id === profile.id}
+            isOwner={isOwner}
             status={profile.status}
             specialCard={profile.special_card}
             canManageSpecialCard={canManageSpecialCard}

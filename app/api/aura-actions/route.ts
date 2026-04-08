@@ -1,4 +1,8 @@
-﻿import { CARD_ACCENT_VARIANTS } from "@/lib/economy";
+import { CARD_ACCENT_VARIANTS } from "@/lib/economy";
+import { createOpsEvent } from "@/lib/server/ops-events";
+import { getProfileModerationState, isProfileLimited } from "@/lib/server/profile-moderation";
+import { consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
+import { buildRateLimitResponse } from "@/lib/server/route-response";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -68,6 +72,16 @@ function mapRpcError(message: string) {
 }
 
 export async function POST(request: Request) {
+  const burstLimit = consumeRateLimit({
+    key: `aura-actions:ip:${getRequestIp(request)}`,
+    limit: 10,
+    windowMs: 10_000,
+  });
+
+  if (!burstLimit.allowed) {
+    return buildRateLimitResponse("Слишком много попыток выполнить трату. Подожди несколько секунд.", burstLimit);
+  }
+
   const supabase = await createClient();
 
   const {
@@ -77,6 +91,31 @@ export async function POST(request: Request) {
 
   if (userError || !user) {
     return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+  }
+
+  const moderationState = await getProfileModerationState(user.id);
+  if (isProfileLimited(moderationState)) {
+    await createOpsEvent({
+      level: "warn",
+      scope: "aura_actions",
+      eventType: "limited_profile_action_blocked",
+      profileId: user.id,
+      requestPath: new URL(request.url).pathname,
+      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
+      message: "Aura action blocked because profile is limited",
+    });
+
+    return NextResponse.json({ error: "РџСЂРѕС„РёР»СЊ РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РµРЅ" }, { status: 403 });
+  }
+
+  const userLimit = consumeRateLimit({
+    key: `aura-actions:user:${user.id}`,
+    limit: 5,
+    windowMs: 10_000,
+  });
+
+  if (!userLimit.allowed) {
+    return buildRateLimitResponse("Слишком много попыток выполнить трату. Подожди несколько секунд.", userLimit);
   }
 
   let payload: { action?: unknown; variant?: unknown };
@@ -104,6 +143,15 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
+      await createOpsEvent({
+        level: "error",
+        scope: "aura_actions",
+        eventType: "decay_shield_failed",
+        profileId: user.id,
+        requestPath: new URL(request.url).pathname,
+        requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
+        message: error.message,
+      });
       const mapped = mapRpcError(error.message || "");
       return NextResponse.json({ error: mapped.error }, { status: mapped.status });
     }
@@ -126,6 +174,15 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
+      await createOpsEvent({
+        level: "error",
+        scope: "aura_actions",
+        eventType: "streak_save_failed",
+        profileId: user.id,
+        requestPath: new URL(request.url).pathname,
+        requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
+        message: error.message,
+      });
       const mapped = mapRpcError(error.message || "");
       return NextResponse.json({ error: mapped.error }, { status: mapped.status });
     }
@@ -159,6 +216,18 @@ export async function POST(request: Request) {
     .single();
 
   if (error) {
+    await createOpsEvent({
+      level: "error",
+      scope: "aura_actions",
+      eventType: "card_accent_failed",
+      profileId: user.id,
+      requestPath: new URL(request.url).pathname,
+      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
+      message: error.message,
+      payload: {
+        variant,
+      },
+    });
     const mapped = mapRpcError(error.message || "");
     return NextResponse.json({ error: mapped.error }, { status: mapped.status });
   }

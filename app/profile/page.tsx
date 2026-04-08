@@ -1,31 +1,20 @@
 import AuraCard from "@/components/AuraCard";
 import AuraSpendActionsCard from "@/components/AuraSpendActionsCard";
-import AuraTransactions from "@/components/AuraTransactions";
 import Background from "@/components/Background";
 import DailyRewardCard from "@/components/DailyRewardCard";
-import LeaderboardPreview from "@/components/LeaderboardPreview";
-import ProfileRaceCard from "@/components/ProfileRaceCard";
-import ReengagementEventsCard from "@/components/ReengagementEventsCard";
+import InviteLoopCard from "@/components/InviteLoopCard";
+import ShareButton from "@/components/ShareButton";
 import { getDailyRewardStatus, getStreakRescueStatus } from "@/lib/economy";
+import { drainPendingNotificationQueue } from "@/lib/server/notification-delivery";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { after } from "next/server";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import ShareButton from "@/components/ShareButton";
+import { Suspense } from "react";
 import CopyLink from "./CopyLink";
-
-interface GrowthLeaderRow {
-  user_id: string;
-  username: string;
-  display_name: string;
-  aura_points: number;
-  growth_points: number;
-}
-
-interface SpotlightRow {
-  profile_id: string;
-  expires_at: string;
-}
+import ProfileSecondaryPanels from "./ProfileSecondaryPanels";
 
 interface AuraEffectRow {
   effect_type: "DECAY_SHIELD" | "CARD_ACCENT";
@@ -33,58 +22,17 @@ interface AuraEffectRow {
   expires_at: string;
 }
 
-interface SpotlightProfileRow {
-  id: string;
-  username: string;
-  display_name: string | null;
-  aura_points: number;
-}
-
-interface NotificationEventRow {
-  id: string;
-  event_type: string;
-  status: string;
-  created_at: string;
-  scheduled_for: string;
-}
-
-interface ProfileLeaderboardContextRow {
-  profile_id: string;
-  username: string;
-  display_name: string;
-  aura_points: number;
-  rank_position: number | string;
-  distance_to_next: number;
-  distance_to_top_target: number;
-  above_profile_id: string | null;
-  above_username: string | null;
-  above_display_name: string | null;
-  above_aura_points: number | null;
-  below_profile_id: string | null;
-  below_username: string | null;
-  below_display_name: string | null;
-  below_aura_points: number | null;
-}
-
-interface WeeklyTitleRow {
-  title_key: string;
-  title: string;
-  profile_id: string;
-}
-
-const WEEKLY_TITLE_LABELS: Record<string, string> = {
-  weekly_aura_champion: "Чемп ауры",
-  weekly_rise_rocket: "Ракета роста",
-  weekly_hype_pulse: "Пульс хайпа",
-};
-
-function asNumber(value: number | string | null | undefined): number {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : 0;
-  }
-
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
+function ProfileSecondaryFallback() {
+  return (
+    <>
+      <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Подгружаем гонку и события</p>
+      </section>
+      <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Подгружаем историю ауры</p>
+      </section>
+    </>
+  );
 }
 
 export default async function ProfilePage() {
@@ -109,6 +57,33 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
+  if (!profile.invite_code) {
+    const { data: inviteCode } = await supabase.rpc("ensure_profile_invite_code", { p_profile_id: user.id });
+    if (inviteCode) {
+      profile.invite_code = inviteCode;
+    }
+  }
+
+  after(async () => {
+    try {
+      const admin = createAdminClient();
+      const { error } = await admin.rpc("sync_leaderboard_presence_event", { p_profile_id: user.id });
+
+      if (error) {
+        console.error("[Profile Page] Failed to sync leaderboard presence", error.message);
+      }
+
+      const weeklyMomentsResult = await admin.rpc("emit_active_weekly_title_moments");
+      if (weeklyMomentsResult.error) {
+        console.error("[Profile Page] Failed to emit weekly title moments", weeklyMomentsResult.error.message);
+      }
+
+      await drainPendingNotificationQueue(4);
+    } catch (error) {
+      console.error("[Profile Page] Failed to initialize admin client for leaderboard sync", error);
+    }
+  });
+
   const nowIso = new Date().toISOString();
   const nowDate = new Date();
   const utcWeekDay = (nowDate.getUTCDay() + 6) % 7;
@@ -123,189 +98,70 @@ export default async function ProfilePage() {
     profile.last_streak_save_at ?? null,
   );
 
-  const leaderboardSyncResult = await supabase.rpc("sync_leaderboard_presence_event", { p_profile_id: user.id });
-  if (leaderboardSyncResult.error) {
-    console.error("[Profile Page] Failed to sync leaderboard presence", leaderboardSyncResult.error.message);
-  }
-
   const [
     boostResult,
     auraEffectsResult,
-    spotlightResult,
     votesUpResult,
     votesDownResult,
-    transactionsResult,
-    auraLeadersResult,
-    growthLeadersResult,
     adminCheckResult,
     weeklyRewardDaysResult,
-    reengagementEventsResult,
-    raceContextResult,
-    weeklyTitlesResult,
-  ] = await Promise.all([
-    supabase
-      .from("boosts")
-      .select("expires_at")
-      .eq("profile_id", user.id)
-      .gt("expires_at", nowIso)
-      .order("expires_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("aura_effects")
-      .select("effect_type, effect_variant, expires_at")
-      .eq("profile_id", user.id)
-      .gt("expires_at", nowIso),
-    supabase
-      .from("boosts")
-      .select("profile_id, expires_at")
-      .gt("expires_at", nowIso)
-      .order("expires_at", { ascending: false })
-      .limit(5),
-    supabase
-      .from("votes")
-      .select("id", { count: "exact", head: true })
-      .eq("target_id", user.id)
-      .eq("vote_type", "up"),
-    supabase
-      .from("votes")
-      .select("id", { count: "exact", head: true })
-      .eq("target_id", user.id)
-      .eq("vote_type", "down"),
-    supabase
-      .from("transactions")
-      .select("id, amount, type, description, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20),
-    supabase
-      .from("profiles")
-      .select("id, username, display_name, aura_points")
-      .order("aura_points", { ascending: false })
-      .limit(5),
-    supabase.rpc("get_growth_leaderboard", { p_days: 7, p_limit: 5 }),
-    supabase.rpc("is_platform_admin"),
-    supabase
-      .from("transactions")
-      .select("created_at")
-      .eq("user_id", user.id)
-      .eq("type", "daily_reward")
-      .gte("created_at", weekStart.toISOString())
-      .lt("created_at", weekEnd.toISOString()),
-    supabase
-      .from("notification_events")
-      .select("id, event_type, status, created_at, scheduled_for")
-      .eq("profile_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(6),
-    supabase.rpc("get_profile_leaderboard_context", { p_profile_id: user.id, p_top_target: 10 }).maybeSingle(),
-    supabase.rpc("get_active_weekly_titles", { p_limit: 12 }),
-  ]);
+    pendingInvitesResult,
+    activatedInvitesResult,
+  ] =
+    await Promise.all([
+      supabase
+        .from("boosts")
+        .select("expires_at")
+        .eq("profile_id", user.id)
+        .gt("expires_at", nowIso)
+        .order("expires_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("aura_effects")
+        .select("effect_type, effect_variant, expires_at")
+        .eq("profile_id", user.id)
+        .gt("expires_at", nowIso),
+      supabase
+        .from("votes")
+        .select("id", { count: "exact", head: true })
+        .eq("target_id", user.id)
+        .eq("vote_type", "up"),
+      supabase
+        .from("votes")
+        .select("id", { count: "exact", head: true })
+        .eq("target_id", user.id)
+        .eq("vote_type", "down"),
+      supabase.rpc("is_platform_admin"),
+      supabase
+        .from("transactions")
+        .select("created_at")
+        .eq("user_id", user.id)
+        .eq("type", "daily_reward")
+        .gte("created_at", weekStart.toISOString())
+        .lt("created_at", weekEnd.toISOString()),
+      supabase.from("referrals").select("id", { count: "exact", head: true }).eq("inviter_id", user.id).eq("status", "pending"),
+      supabase.from("referrals").select("id", { count: "exact", head: true }).eq("inviter_id", user.id).eq("status", "activated"),
+    ]);
 
   const activeEffects = (auraEffectsResult.data as AuraEffectRow[] | null) || [];
   const decayShieldUntil = activeEffects.find((effect) => effect.effect_type === "DECAY_SHIELD")?.expires_at ?? null;
   const activeCardAccent = activeEffects.find((effect) => effect.effect_type === "CARD_ACCENT");
   const cardAccent = activeCardAccent?.effect_variant ?? null;
   const cardAccentUntil = activeCardAccent?.expires_at ?? null;
-
-  const spotlightRows = (spotlightResult.data as SpotlightRow[] | null) || [];
-  const uniqueSpotlightRows = Array.from(
-    new Map(spotlightRows.map((row) => [row.profile_id, row])).values(),
-  );
-  const spotlightIds = uniqueSpotlightRows.map((row) => row.profile_id);
-
-  const spotlightProfilesResult = spotlightIds.length
-    ? await supabase.from("profiles").select("id, username, display_name, aura_points").in("id", spotlightIds)
-    : { data: [] as SpotlightProfileRow[] };
-
-  const spotlightProfileMap = new Map((spotlightProfilesResult.data || []).map((row) => [row.id, row]));
-  const spotlightLeaders = uniqueSpotlightRows
-    .map((row) => {
-      const profileRow = spotlightProfileMap.get(row.profile_id);
-      if (!profileRow) return null;
-
-      return {
-        id: profileRow.id,
-        username: profileRow.username,
-        displayName: profileRow.display_name || profileRow.username,
-        auraPoints: Number(profileRow.aura_points || 0),
-        spotlightUntil: row.expires_at,
-      };
-    })
-    .filter((item): item is NonNullable<typeof item> => item !== null);
-
-  const auraLeaders = (auraLeadersResult.data || []).map((row) => ({
-    id: row.id,
-    username: row.username,
-    displayName: row.display_name || row.username,
-    auraPoints: Number(row.aura_points || 0),
-  }));
-
-  const growthLeaders = ((growthLeadersResult.data as GrowthLeaderRow[] | null) || []).map((row) => ({
-    id: row.user_id,
-    username: row.username,
-    displayName: row.display_name || row.username,
-    auraPoints: Number(row.aura_points || 0),
-    growthPoints: Number(row.growth_points || 0),
-  }));
-
   const canManageSpecialCard = Boolean(adminCheckResult.data);
   const spotlightUntil = boostResult.data?.expires_at ?? null;
   const weeklyRewardDays = new Set(
     (weeklyRewardDaysResult.data || []).map((row) => new Date(row.created_at).toISOString().slice(0, 10)),
   ).size;
-
-  if (raceContextResult.error) {
-    console.error("[Profile Page] Failed to load race context", raceContextResult.error.message);
-  }
-
-  if (weeklyTitlesResult.error) {
-    console.error("[Profile Page] Failed to load weekly titles", weeklyTitlesResult.error.message);
-  }
-
-  const raceContextRaw = (raceContextResult.data || null) as ProfileLeaderboardContextRow | null;
-  let raceContext:
-    | {
-        profileId: string;
-        rank: number;
-        distanceToNext: number;
-        distanceToTop10: number;
-        above: { id: string; username: string; displayName: string; auraPoints: number } | null;
-        below: { id: string; username: string; displayName: string; auraPoints: number } | null;
-      }
-    | null = null;
-
-  if (raceContextRaw) {
-    raceContext = {
-      profileId: raceContextRaw.profile_id,
-      rank: asNumber(raceContextRaw.rank_position),
-      distanceToNext: asNumber(raceContextRaw.distance_to_next),
-      distanceToTop10: asNumber(raceContextRaw.distance_to_top_target),
-      above: raceContextRaw.above_profile_id
-        ? {
-            id: raceContextRaw.above_profile_id,
-            username: raceContextRaw.above_username || "",
-            displayName: raceContextRaw.above_display_name || raceContextRaw.above_username || "",
-            auraPoints: asNumber(raceContextRaw.above_aura_points),
-          }
-        : null,
-      below: raceContextRaw.below_profile_id
-        ? {
-            id: raceContextRaw.below_profile_id,
-            username: raceContextRaw.below_username || "",
-            displayName: raceContextRaw.below_display_name || raceContextRaw.below_username || "",
-            auraPoints: asNumber(raceContextRaw.below_aura_points),
-          }
-        : null,
-    };
-  }
-
-  const weeklyTitles = ((weeklyTitlesResult.data as WeeklyTitleRow[] | null) || [])
-    .filter((row) => row.profile_id === user.id)
-    .map((row) => ({
-      key: row.title_key,
-      title: WEEKLY_TITLE_LABELS[row.title_key] || row.title,
-    }));
+  const pendingInvites = Number(pendingInvitesResult.count || 0);
+  const activatedInvites = Number(activatedInvitesResult.count || 0);
+  const inviteCode = typeof profile.invite_code === "string" ? profile.invite_code : null;
+  const webInviteLink = inviteCode ? `${origin}/login?ref=${encodeURIComponent(inviteCode)}` : null;
+  const telegramInviteLink =
+    inviteCode && process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME
+      ? `https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME}?startapp=${encodeURIComponent(`ref_${inviteCode}`)}`
+      : null;
 
   return (
     <div className="min-h-screen bg-background text-white font-unbounded relative overflow-hidden">
@@ -385,10 +241,6 @@ export default async function ProfilePage() {
             }}
           />
 
-          <ProfileRaceCard raceContext={raceContext} weeklyTitles={weeklyTitles} />
-
-          <ReengagementEventsCard events={(reengagementEventsResult.data as NotificationEventRow[] | null) || []} />
-
           <AuraSpendActionsCard
             profileId={profile.id}
             initialState={{
@@ -402,16 +254,18 @@ export default async function ProfilePage() {
             }}
           />
 
-          <LeaderboardPreview
-            auraLeaders={auraLeaders}
-            growthLeaders={growthLeaders}
-            spotlightLeaders={spotlightLeaders}
-            currentUserId={user.id}
-          />
-
-          <AuraTransactions transactions={transactionsResult.data || []} />
+          <Suspense fallback={<ProfileSecondaryFallback />}>
+            <ProfileSecondaryPanels userId={user.id} />
+          </Suspense>
 
           <div className="w-full flex flex-col items-center space-y-6 pb-20">
+            <InviteLoopCard
+              inviteCode={inviteCode}
+              webInviteLink={webInviteLink}
+              telegramInviteLink={telegramInviteLink}
+              pendingCount={pendingInvites}
+              activatedCount={activatedInvites}
+            />
             <CopyLink link={`${origin}/check/${profile.username}`} />
             <ShareButton username={profile.username} />
           </div>
@@ -420,4 +274,3 @@ export default async function ProfilePage() {
     </div>
   );
 }
-

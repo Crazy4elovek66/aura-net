@@ -1,5 +1,11 @@
-﻿import { createAdminClient } from "@/lib/supabase/admin";
+import { consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
+import { drainPendingNotificationQueue } from "@/lib/server/notification-delivery";
+import { createOpsEvent } from "@/lib/server/ops-events";
+import { getProfileModerationState, isProfileLimited } from "@/lib/server/profile-moderation";
+import { buildRateLimitResponse } from "@/lib/server/route-response";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { after } from "next/server";
 import { NextResponse } from "next/server";
 
 interface ClaimDailyRewardRow {
@@ -17,10 +23,90 @@ interface ClaimDailyRewardRow {
   unlocked_achievements?: string[] | null;
 }
 
-export async function POST() {
-  const supabase = await createClient();
+async function runDailyRewardSideEffects(userId: string, rewardRow: ClaimDailyRewardRow) {
+  const availableAt = rewardRow.available_at ?? null;
   let admin: ReturnType<typeof createAdminClient> | null = null;
 
+  try {
+    admin = createAdminClient();
+  } catch {
+    admin = null;
+  }
+
+  if (!admin) {
+    return;
+  }
+
+  if (availableAt) {
+    const availableMs = new Date(availableAt).getTime();
+    const reminderMs = Number.isFinite(availableMs) ? availableMs - 2 * 60 * 60 * 1000 : Date.now();
+    const reminderIso = new Date(reminderMs).toISOString();
+    const dedupeDate = availableAt.slice(0, 10);
+
+    const reminderEventResult = await admin.rpc("enqueue_notification_event", {
+      p_profile_id: userId,
+      p_event_type: "streak_reminder",
+      p_payload: {
+        source: "daily_reward",
+        streak: Number(rewardRow.streak || 0),
+        availableAt,
+      },
+      p_dedupe_key: `streak-reminder:${userId}:${dedupeDate}`,
+      p_channel: "telegram",
+      p_scheduled_for: reminderIso,
+    });
+
+    if (reminderEventResult.error) {
+      console.error("[DailyReward API] Failed to enqueue streak reminder", reminderEventResult.error.message);
+    }
+  }
+
+  const leaderboardStateResult = await admin.rpc("sync_leaderboard_presence_event", {
+    p_profile_id: userId,
+  });
+
+  if (leaderboardStateResult.error) {
+    console.error("[DailyReward API] Failed to sync leaderboard presence", leaderboardStateResult.error.message);
+  }
+
+  const weeklyTitlesRefreshResult = await admin.rpc("refresh_weekly_titles");
+  if (weeklyTitlesRefreshResult.error) {
+    console.error("[DailyReward API] Failed to refresh weekly titles", weeklyTitlesRefreshResult.error.message);
+  }
+
+  const weeklyMomentsResult = await admin.rpc("emit_active_weekly_title_moments");
+  if (weeklyMomentsResult.error) {
+    console.error("[DailyReward API] Failed to emit weekly title moments", weeklyMomentsResult.error.message);
+  }
+
+  const referralResult = await admin.rpc("activate_referral_if_eligible", {
+    p_invitee_id: userId,
+    p_source: "daily_reward",
+    p_context: {
+      source: "daily_reward",
+      streak: Number(rewardRow.streak || 0),
+    },
+  });
+
+  if (referralResult.error) {
+    console.error("[DailyReward API] Failed to activate referral", referralResult.error.message);
+  }
+
+  await drainPendingNotificationQueue();
+}
+
+export async function POST(request: Request) {
+  const burstLimit = consumeRateLimit({
+    key: `daily-reward:ip:${getRequestIp(request)}`,
+    limit: 6,
+    windowMs: 10_000,
+  });
+
+  if (!burstLimit.allowed) {
+    return buildRateLimitResponse("Слишком много попыток получить награду. Подожди несколько секунд.", burstLimit);
+  }
+
+  const supabase = await createClient();
   const {
     data: { user },
     error: userError,
@@ -34,15 +120,48 @@ export async function POST() {
     return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
   }
 
-  try {
-    admin = createAdminClient();
-  } catch {
-    admin = null;
+  const moderationState = await getProfileModerationState(user.id);
+  if (isProfileLimited(moderationState)) {
+    await createOpsEvent({
+      level: "warn",
+      scope: "daily_reward",
+      eventType: "limited_profile_reward_blocked",
+      profileId: user.id,
+      requestPath: new URL(request.url).pathname,
+      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
+      message: "Daily reward blocked because profile is limited",
+    });
+
+    return NextResponse.json({ error: "РџСЂРѕС„РёР»СЊ РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РµРЅ" }, { status: 403 });
+  }
+
+  const userLimit = consumeRateLimit({
+    key: `daily-reward:user:${user.id}`,
+    limit: 3,
+    windowMs: 10_000,
+  });
+
+  if (!userLimit.allowed) {
+    return buildRateLimitResponse("Слишком много попыток получить награду. Подожди несколько секунд.", userLimit);
   }
 
   const { data, error } = await supabase.rpc("claim_daily_reward", { p_profile_id: user.id }).single();
 
   if (error) {
+    await createOpsEvent({
+      level: "error",
+      scope: "daily_reward",
+      eventType: "claim_daily_reward_failed",
+      profileId: user.id,
+      requestPath: new URL(request.url).pathname,
+      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
+      message: error.message,
+      payload: {
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      },
+    });
     const dbMessage = typeof error.message === "string" ? error.message : "";
     const normalized = dbMessage.toLowerCase();
     const notFound = normalized.includes("profile not found");
@@ -73,47 +192,11 @@ export async function POST() {
 
   const rewardRow = (data || {}) as ClaimDailyRewardRow;
   const claimed = Boolean(rewardRow.claimed);
-  const availableAt = rewardRow.available_at ?? null;
-
-  if (claimed && availableAt) {
-    const availableMs = new Date(availableAt).getTime();
-    const reminderMs = Number.isFinite(availableMs) ? availableMs - 2 * 60 * 60 * 1000 : Date.now();
-    const reminderIso = new Date(reminderMs).toISOString();
-    const dedupeDate = availableAt.slice(0, 10);
-
-    const reminderEventResult = await supabase.rpc("enqueue_notification_event", {
-      p_profile_id: user.id,
-      p_event_type: "streak_reminder",
-      p_payload: {
-        source: "daily_reward",
-        streak: Number(rewardRow.streak || 0),
-        availableAt,
-      },
-      p_dedupe_key: `streak-reminder:${user.id}:${dedupeDate}`,
-      p_channel: "telegram",
-      p_scheduled_for: reminderIso,
-    });
-
-    if (reminderEventResult.error) {
-      console.error("[DailyReward API] Failed to enqueue streak reminder", reminderEventResult.error.message);
-    }
-  }
 
   if (claimed) {
-    const leaderboardStateResult = await supabase.rpc("sync_leaderboard_presence_event", {
-      p_profile_id: user.id,
+    after(async () => {
+      await runDailyRewardSideEffects(user.id, rewardRow);
     });
-
-    if (leaderboardStateResult.error) {
-      console.error("[DailyReward API] Failed to sync leaderboard presence", leaderboardStateResult.error.message);
-    }
-
-    if (admin) {
-      const weeklyTitlesRefreshResult = await admin.rpc("refresh_weekly_titles");
-      if (weeklyTitlesRefreshResult.error) {
-        console.error("[DailyReward API] Failed to refresh weekly titles", weeklyTitlesRefreshResult.error.message);
-      }
-    }
   }
 
   return NextResponse.json({

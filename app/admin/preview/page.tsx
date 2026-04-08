@@ -23,8 +23,6 @@ import CreatorCardPrime from "@/components/CreatorCardPrime";
 import CreatorCardOrigin from "@/components/CreatorCardOrigin";
 import CreatorCardSlot00 from "@/components/CreatorCardSlot00";
 
-import Link from "next/link";
-
 export default function AdminPreviewPage() {
   const allCards = [
     { id: "v19", name: "Origin Elite", component: CreatorCardOrigin },

@@ -1,4 +1,7 @@
 import { RESONANCE_SPECIAL_CARD } from "@/lib/special-card";
+import { createOpsEvent } from "@/lib/server/ops-events";
+import { consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
+import { buildRateLimitResponse } from "@/lib/server/route-response";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -7,6 +10,16 @@ type Mode = "assign" | "remove";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(request: Request) {
+  const burstLimit = consumeRateLimit({
+    key: `admin-special-card:ip:${getRequestIp(request)}`,
+    limit: 6,
+    windowMs: 10_000,
+  });
+
+  if (!burstLimit.allowed) {
+    return buildRateLimitResponse("Слишком много чувствительных admin-запросов. Подожди несколько секунд.", burstLimit);
+  }
+
   const supabase = await createClient();
 
   const {
@@ -15,6 +28,16 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userLimit = consumeRateLimit({
+    key: `admin-special-card:user:${user.id}`,
+    limit: 4,
+    windowMs: 10_000,
+  });
+
+  if (!userLimit.allowed) {
+    return buildRateLimitResponse("Слишком много чувствительных admin-запросов. Подожди несколько секунд.", userLimit);
   }
 
   let body: { profileId?: unknown; mode?: unknown };
@@ -40,6 +63,19 @@ export async function POST(request: Request) {
   });
 
   if (rpcError) {
+    await createOpsEvent({
+      level: "error",
+      scope: "admin",
+      eventType: "special_card_update_failed",
+      actorId: user.id,
+      profileId,
+      requestPath: new URL(request.url).pathname,
+      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
+      message: rpcError.message,
+      payload: {
+        mode,
+      },
+    });
     const message = rpcError.message || "";
     const normalized = message.toLowerCase();
 
