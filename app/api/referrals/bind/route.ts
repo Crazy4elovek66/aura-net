@@ -1,10 +1,6 @@
-import { NextResponse } from "next/server";
-
+import { buildApiErrorResponse, buildApiSuccessResponse, API_ERROR_MESSAGES } from "@/lib/server/route-response";
+import { normalizeReferralCode } from "@/lib/auth/telegram-auth";
 import { createClient } from "@/lib/supabase/server";
-
-function normalizeCode(value: string) {
-  return value.startsWith("ref_") ? value.slice(4) : value;
-}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -14,7 +10,9 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    return buildApiErrorResponse(401, API_ERROR_MESSAGES.unauthorized, {
+      code: "UNAUTHORIZED",
+    });
   }
 
   let payload: { code?: unknown };
@@ -22,12 +20,17 @@ export async function POST(request: Request) {
   try {
     payload = await request.json();
   } catch {
-    return NextResponse.json({ error: "Некорректный JSON" }, { status: 400 });
+    return buildApiErrorResponse(400, API_ERROR_MESSAGES.invalidJson, {
+      code: "INVALID_JSON",
+    });
   }
 
-  const code = typeof payload.code === "string" ? normalizeCode(payload.code.trim()) : "";
+  const code = typeof payload.code === "string" ? normalizeReferralCode(payload.code) || "" : "";
   if (!code) {
-    return NextResponse.json({ success: true, skipped: true, reason: "missing_code" });
+    return buildApiSuccessResponse({
+      skipped: true,
+      reason: "missing_code",
+    });
   }
 
   const { data, error } = await supabase
@@ -42,11 +45,12 @@ export async function POST(request: Request) {
 
   if (error) {
     console.error("[Referral Bind API] Failed to bind referral", error.message);
-    return NextResponse.json({ error: "Не удалось привязать приглашение" }, { status: 500 });
+    return buildApiErrorResponse(500, "Не удалось привязать приглашение.", {
+      code: "REFERRAL_BIND_FAILED",
+    });
   }
 
-  return NextResponse.json({
-    success: true,
+  return buildApiSuccessResponse({
     ...(data || {}),
   });
 }

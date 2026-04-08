@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { motion } from "framer-motion";
 
+const supabase = createClient();
+
 interface VoteRow {
   created_at: string;
   is_anonymous: boolean;
@@ -25,7 +27,6 @@ interface BurnEntry {
 export default function BurnLog({ profileId }: { profileId: string }) {
   const [entries, setEntries] = useState<BurnEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
 
   useEffect(() => {
     let isCancelled = false;
@@ -86,7 +87,7 @@ export default function BurnLog({ profileId }: { profileId: string }) {
     return () => {
       isCancelled = true;
     };
-  }, [profileId, supabase]);
+  }, [profileId]);
 
   if (loading) return <div className="text-center p-4">Подгружаем хейтеров...</div>;
 

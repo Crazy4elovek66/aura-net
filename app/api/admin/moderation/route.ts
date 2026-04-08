@@ -1,8 +1,12 @@
-import { consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
-import { buildRateLimitResponse } from "@/lib/server/route-response";
+import { consumePersistentRateLimit, consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
+import {
+  API_ERROR_MESSAGES,
+  buildApiErrorResponse,
+  buildApiSuccessResponse,
+  buildRateLimitResponse,
+} from "@/lib/server/route-response";
 import { createOpsEvent } from "@/lib/server/ops-events";
 import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
 
 type ModerationAction =
   | "limit"
@@ -39,7 +43,7 @@ export async function POST(request: Request) {
   });
 
   if (!burstLimit.allowed) {
-    return buildRateLimitResponse("Too many admin moderation requests. Please wait a few seconds.", burstLimit);
+    return buildRateLimitResponse("Слишком много модераторских запросов. Подожди несколько секунд.", burstLimit);
   }
 
   const supabase = await createClient();
@@ -48,22 +52,26 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return buildApiErrorResponse(401, API_ERROR_MESSAGES.unauthorized, {
+      code: "UNAUTHORIZED",
+    });
   }
 
-  const userLimit = consumeRateLimit({
+  const userLimit = await consumePersistentRateLimit({
     key: `admin-moderation:user:${user.id}`,
     limit: 8,
     windowMs: 10_000,
   });
 
   if (!userLimit.allowed) {
-    return buildRateLimitResponse("Too many admin moderation requests. Please wait a few seconds.", userLimit);
+    return buildRateLimitResponse("Слишком много модераторских запросов. Подожди несколько секунд.", userLimit);
   }
 
   const { data: isAdmin } = await supabase.rpc("is_platform_admin");
   if (!isAdmin) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return buildApiErrorResponse(403, API_ERROR_MESSAGES.forbidden, {
+      code: "FORBIDDEN",
+    });
   }
 
   let body: {
@@ -76,7 +84,9 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return buildApiErrorResponse(400, API_ERROR_MESSAGES.invalidJson, {
+      code: "INVALID_JSON",
+    });
   }
 
   const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
@@ -93,7 +103,9 @@ export async function POST(request: Request) {
   const note = typeof body.note === "string" ? body.note.trim() : "";
 
   if (!profileId || !UUID_RE.test(profileId) || !action) {
-    return NextResponse.json({ error: "Invalid moderation request" }, { status: 400 });
+    return buildApiErrorResponse(400, "Некорректный запрос модерации.", {
+      code: "INVALID_MODERATION_REQUEST",
+    });
   }
 
   const { data, error } = await supabase.rpc("set_profile_moderation_state", {
@@ -121,10 +133,14 @@ export async function POST(request: Request) {
 
     const normalized = (error.message || "").toLowerCase();
     if (normalized.includes("only platform admins")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return buildApiErrorResponse(403, API_ERROR_MESSAGES.forbidden, {
+        code: "FORBIDDEN",
+      });
     }
 
-    return NextResponse.json({ error: "Failed to update moderation state" }, { status: 500 });
+    return buildApiErrorResponse(500, "Не удалось обновить состояние модерации.", {
+      code: "MODERATION_UPDATE_FAILED",
+    });
   }
 
   await createOpsEvent({
@@ -143,8 +159,7 @@ export async function POST(request: Request) {
     },
   });
 
-  return NextResponse.json({
-    success: true,
+  return buildApiSuccessResponse({
     state: Array.isArray(data) ? data[0] || null : null,
   });
 }

@@ -1,4 +1,5 @@
 import { buildCacheControl, getOrSetRuntimeCache } from "@/lib/server/runtime-cache";
+import { buildApiErrorResponse } from "@/lib/server/route-response";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
@@ -50,9 +51,13 @@ export async function GET() {
     });
   } catch (error) {
     if (error instanceof Error && error.message === "SERVER_CONFIG") {
-      return NextResponse.json({ error: "Server config error" }, { status: 500 });
+      return buildApiErrorResponse(500, "Ошибка конфигурации сервера.", {
+        code: "SERVER_CONFIG",
+      });
     }
 
-    return NextResponse.json({ error: "Не удалось загрузить статистику" }, { status: 500 });
+    return buildApiErrorResponse(500, "Не удалось загрузить статистику.", {
+      code: "LANDING_STATS_FAILED",
+    });
   }
 }

@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 const checks = [
   { label: "lint", args: ["run", "lint"] },
   { label: "typecheck", args: ["run", "typecheck"] },
+  { label: "smoke", args: ["run", "test:smoke"] },
   { label: "build", args: ["run", "build"] },
 ];
 
@@ -34,11 +35,13 @@ try {
   }
 
   console.log("\nPrelaunch technical checks passed.");
-  console.log("Manual smoke flows still recommended:");
-  console.log("- Telegram auth -> setup/profile");
-  console.log("- vote + discover + leaderboard");
-  console.log("- daily reward + spend actions");
-  console.log("- /admin moderation actions + notification drain");
+  console.log("Verified automatically:");
+  console.log("- critical auth parsing and safe redirect/referral normalization");
+  console.log("- vote and daily reward response contracts / error mapping");
+  console.log("- runtime job payload guards for notifications/referrals");
+  console.log("- schema regression guards for referral activation and notification enqueue");
+  console.log("- moderation/public API route source contract markers");
+  console.log("Manual smoke flows still recommended via `npm run qa:smoke:manual`.");
 } catch (error) {
   console.error(`\nPrelaunch technical checks failed: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;

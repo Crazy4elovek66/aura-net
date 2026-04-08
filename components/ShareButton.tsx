@@ -23,11 +23,14 @@ export default function ShareButton({ username }: { username: string }) {
     if (!node || loading) return;
 
     setLoading(true);
+    const originalPosition = node.style.position;
+    const originalSrcs = new Map<HTMLImageElement, string>();
     try {
-      await document.fonts.ready;
+      if ("fonts" in document) {
+        await document.fonts.ready;
+      }
 
       const images = Array.from(node.getElementsByTagName("img"));
-      const originalSrcs = new Map<HTMLImageElement, string>();
 
       await Promise.all(
         images.map(async (img) => {
@@ -47,8 +50,6 @@ export default function ShareButton({ username }: { username: string }) {
           }
         }),
       );
-
-      const originalPosition = node.style.position;
       node.style.position = "relative";
 
       await new Promise((resolve) => setTimeout(resolve, 600));
@@ -65,12 +66,6 @@ export default function ShareButton({ username }: { username: string }) {
         canvasWidth: 1080,
         canvasHeight: 1920,
       });
-
-      originalSrcs.forEach((src, img) => {
-        img.src = src;
-      });
-      node.style.position = originalPosition;
-
       if (!blob) throw new Error("Blob generation failed");
 
       if (resultUrl) {
@@ -91,10 +86,14 @@ export default function ShareButton({ username }: { username: string }) {
       console.error("Capture Error:", err);
       notify({
         variant: "error",
-        title: "Карточка не собрана",
-        message: "Не удалось сгенерировать изображение. Попробуй ещё раз.",
+        title: "Карточка не собралась",
+        message: "Не удалось подготовить изображение. Попробуй ещё раз через пару секунд.",
       });
     } finally {
+      originalSrcs.forEach((src, img) => {
+        img.src = src;
+      });
+      node.style.position = originalPosition;
       setLoading(false);
     }
   };
@@ -108,22 +107,23 @@ export default function ShareButton({ username }: { username: string }) {
           disabled={loading}
           className="w-full py-4 rounded-3xl bg-white text-black font-black text-sm uppercase tracking-widest hover:bg-neon-purple transition-all active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.2)] flex items-center justify-center disabled:opacity-60"
         >
-          {loading ? "Генерация..." : "Скачать для stories"}
+          {loading ? "Собираем карточку..." : "Скачать для сторис"}
         </button>
       </div>
       <p className="text-[9px] text-center mt-3 text-white/30 font-black uppercase tracking-widest hidden sm:block">
-        9:16 PNG • High Quality
+        9:16 PNG • Чёткое качество
       </p>
 
       {showResult && resultUrl && (
         <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center p-4 backdrop-blur-xl">
           <div className="relative w-full max-w-[320px] aspect-[9/16] bg-black/50 overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
-            <img src={resultUrl} alt="Result" className="w-full h-full object-contain" />
+            {/* eslint-disable-next-line @next/next/no-img-element -- Preview uses an object URL from html-to-image. */}
+            <img src={resultUrl} alt="Готовая карточка" className="w-full h-full object-contain" />
           </div>
 
           <div className="mt-8 text-center space-y-4 px-6">
             <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.3em] leading-relaxed animate-pulse">
-              Зажми картинку и сохрани её в фото
+              Нажми на картинку и сохрани её в фото
             </p>
 
             <button

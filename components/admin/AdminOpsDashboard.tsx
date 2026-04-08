@@ -12,6 +12,8 @@ interface AdminSnapshot {
     rewards24h: number;
     pendingNotifications: number;
     failedNotifications24h: number;
+    pendingRuntimeJobs: number;
+    failedRuntimeJobs24h: number;
     limitedProfiles: number;
     hiddenFromDiscover: number;
     hiddenFromLeaderboards: number;
@@ -134,7 +136,7 @@ async function postAdminAction(payload: Record<string, unknown>) {
 
   const result = (await response.json().catch(() => ({}))) as { error?: string };
   if (!response.ok) {
-    throw new Error(result.error || "Admin action failed");
+    throw new Error(result.error || "Не удалось выполнить действие модерации");
   }
 }
 
@@ -166,7 +168,7 @@ function ActionButtons({
         });
         router.refresh();
       } catch (error) {
-        setLocalError(error instanceof Error ? error.message : "Admin action failed");
+        setLocalError(error instanceof Error ? error.message : "Не удалось выполнить действие модерации");
       }
     });
   };
@@ -180,7 +182,7 @@ function ActionButtons({
           onClick={() => run({ action: isLimited ? "restore" : "limit" })}
           className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/80 transition hover:bg-white/10 disabled:opacity-50"
         >
-          {isLimited ? "Restore" : "Limit"}
+          {isLimited ? "Снять лимит" : "Ограничить"}
         </button>
         <button
           type="button"
@@ -188,7 +190,7 @@ function ActionButtons({
           onClick={() => run({ action: hideFromDiscover ? "show_discover" : "hide_discover" })}
           className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/80 transition hover:bg-white/10 disabled:opacity-50"
         >
-          {hideFromDiscover ? "Show Discover" : "Hide Discover"}
+          {hideFromDiscover ? "Показать в разведке" : "Скрыть из разведки"}
         </button>
         <button
           type="button"
@@ -196,7 +198,7 @@ function ActionButtons({
           onClick={() => run({ action: hideFromLeaderboards ? "show_leaderboards" : "hide_leaderboards" })}
           className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/80 transition hover:bg-white/10 disabled:opacity-50"
         >
-          {hideFromLeaderboards ? "Show LB" : "Hide LB"}
+          {hideFromLeaderboards ? "Показать в гонке" : "Скрыть из гонки"}
         </button>
       </div>
       {localError ? <p className="text-[11px] text-red-300">{localError}</p> : null}
@@ -207,14 +209,16 @@ function ActionButtons({
 export default function AdminOpsDashboard({ snapshot }: { snapshot: AdminSnapshot }) {
   const topNumbers = useMemo(
     () => [
-      { label: "Profiles", value: snapshot.numbers.totalProfiles },
-      { label: "New 24h", value: snapshot.numbers.newProfiles24h },
-      { label: "Votes 24h", value: snapshot.numbers.votes24h },
-      { label: "Rewards 24h", value: snapshot.numbers.rewards24h },
-      { label: "Pending notifications", value: snapshot.numbers.pendingNotifications },
-      { label: "Failed notifications 24h", value: snapshot.numbers.failedNotifications24h },
-      { label: "Limited profiles", value: snapshot.numbers.limitedProfiles },
-      { label: "Critical events 24h", value: snapshot.numbers.criticalEvents24h },
+      { label: "Профили", value: snapshot.numbers.totalProfiles },
+      { label: "Новые за 24ч", value: snapshot.numbers.newProfiles24h },
+      { label: "Голоса за 24ч", value: snapshot.numbers.votes24h },
+      { label: "Награды за 24ч", value: snapshot.numbers.rewards24h },
+      { label: "Уведомления в очереди", value: snapshot.numbers.pendingNotifications },
+      { label: "Сбои доставки за 24ч", value: snapshot.numbers.failedNotifications24h },
+      { label: "Фоновые jobs в очереди", value: snapshot.numbers.pendingRuntimeJobs },
+      { label: "Сбои jobs за 24ч", value: snapshot.numbers.failedRuntimeJobs24h },
+      { label: "Ограниченные профили", value: snapshot.numbers.limitedProfiles },
+      { label: "Критичные события за 24ч", value: snapshot.numbers.criticalEvents24h },
     ],
     [snapshot],
   );

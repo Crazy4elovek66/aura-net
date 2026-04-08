@@ -1,9 +1,13 @@
 import { RESONANCE_SPECIAL_CARD } from "@/lib/special-card";
 import { createOpsEvent } from "@/lib/server/ops-events";
-import { consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
-import { buildRateLimitResponse } from "@/lib/server/route-response";
+import { consumePersistentRateLimit, consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
+import {
+  API_ERROR_MESSAGES,
+  buildApiErrorResponse,
+  buildApiSuccessResponse,
+  buildRateLimitResponse,
+} from "@/lib/server/route-response";
 import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
 
 type Mode = "assign" | "remove";
 
@@ -27,10 +31,12 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return buildApiErrorResponse(401, API_ERROR_MESSAGES.unauthorized, {
+      code: "UNAUTHORIZED",
+    });
   }
 
-  const userLimit = consumeRateLimit({
+  const userLimit = await consumePersistentRateLimit({
     key: `admin-special-card:user:${user.id}`,
     limit: 4,
     windowMs: 10_000,
@@ -45,14 +51,18 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Некорректный JSON" }, { status: 400 });
+    return buildApiErrorResponse(400, API_ERROR_MESSAGES.invalidJson, {
+      code: "INVALID_JSON",
+    });
   }
 
   const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
   const mode: Mode | null = body.mode === "assign" || body.mode === "remove" ? body.mode : null;
 
   if (!profileId || !mode || !UUID_RE.test(profileId)) {
-    return NextResponse.json({ error: "Некорректные данные запроса" }, { status: 400 });
+    return buildApiErrorResponse(400, "Некорректные данные запроса.", {
+      code: "INVALID_SPECIAL_CARD_REQUEST",
+    });
   }
 
   const nextSpecialCard = mode === "assign" ? RESONANCE_SPECIAL_CARD : null;
@@ -80,23 +90,30 @@ export async function POST(request: Request) {
     const normalized = message.toLowerCase();
 
     if (normalized.includes("not authenticated")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return buildApiErrorResponse(401, API_ERROR_MESSAGES.unauthorized, {
+        code: "UNAUTHORIZED",
+      });
     }
 
     if (normalized.includes("only platform admins")) {
-      return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
+      return buildApiErrorResponse(403, API_ERROR_MESSAGES.forbidden, {
+        code: "FORBIDDEN",
+      });
     }
 
     if (normalized.includes("profile not found")) {
-      return NextResponse.json({ error: "Профиль не найден" }, { status: 404 });
+      return buildApiErrorResponse(404, "Профиль не найден.", {
+        code: "PROFILE_NOT_FOUND",
+      });
     }
 
     console.error("[Admin SpecialCard API] RPC error:", rpcError);
-    return NextResponse.json({ error: "Не удалось обновить специальный статус" }, { status: 500 });
+    return buildApiErrorResponse(500, "Не удалось обновить специальный статус.", {
+      code: "SPECIAL_CARD_UPDATE_FAILED",
+    });
   }
 
-  return NextResponse.json({
-    success: true,
+  return buildApiSuccessResponse({
     specialCard: nextSpecialCard,
   });
 }

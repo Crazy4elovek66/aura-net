@@ -1,12 +1,19 @@
-import { consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
-import { drainPendingNotificationQueue } from "@/lib/server/notification-delivery";
+import { consumePersistentRateLimit, consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
 import { createOpsEvent } from "@/lib/server/ops-events";
 import { getProfileModerationState, isProfileLimited } from "@/lib/server/profile-moderation";
-import { buildRateLimitResponse } from "@/lib/server/route-response";
+import {
+  API_ERROR_MESSAGES,
+  buildApiErrorResponse,
+  buildApiSuccessResponse,
+  buildRateLimitResponse,
+} from "@/lib/server/route-response";
+import { buildDailyRewardSuccessPayload } from "@/lib/server/daily-reward-flow";
+import { invalidateRuntimeCache } from "@/lib/server/runtime-cache";
+import { drainRuntimeReliabilityWork, scheduleInternalRuntimeDrain } from "@/lib/server/runtime-reliability";
+import { enqueueRuntimeJob } from "@/lib/server/runtime-jobs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { after } from "next/server";
-import { NextResponse } from "next/server";
 
 interface ClaimDailyRewardRow {
   claimed?: boolean;
@@ -37,6 +44,36 @@ async function runDailyRewardSideEffects(userId: string, rewardRow: ClaimDailyRe
     return;
   }
 
+  let queuedFollowUp = false;
+
+  async function queueJob(params: {
+    eventType: string;
+    message: string;
+    jobType:
+      | "enqueue_notification_event"
+      | "sync_leaderboard_presence"
+      | "refresh_weekly_titles"
+      | "emit_weekly_title_moments"
+      | "activate_referral";
+    dedupeKey?: string;
+    payload?: Record<string, unknown>;
+  }) {
+    queuedFollowUp = true;
+    await createOpsEvent({
+      level: "warn",
+      scope: "daily_reward",
+      eventType: params.eventType,
+      profileId: userId,
+      message: params.message,
+      payload: params.payload,
+    });
+    await enqueueRuntimeJob({
+      jobType: params.jobType,
+      dedupeKey: params.dedupeKey || null,
+      payload: params.payload,
+    });
+  }
+
   if (availableAt) {
     const availableMs = new Date(availableAt).getTime();
     const reminderMs = Number.isFinite(availableMs) ? availableMs - 2 * 60 * 60 * 1000 : Date.now();
@@ -58,6 +95,24 @@ async function runDailyRewardSideEffects(userId: string, rewardRow: ClaimDailyRe
 
     if (reminderEventResult.error) {
       console.error("[DailyReward API] Failed to enqueue streak reminder", reminderEventResult.error.message);
+      await queueJob({
+        eventType: "streak_reminder_enqueue_failed",
+        message: reminderEventResult.error.message,
+        jobType: "enqueue_notification_event",
+        dedupeKey: `daily-reward:streak-reminder:${userId}:${dedupeDate}`,
+        payload: {
+          profileId: userId,
+          eventType: "streak_reminder",
+          data: {
+            source: "daily_reward",
+            streak: Number(rewardRow.streak || 0),
+            availableAt,
+          },
+          dedupeKey: `streak-reminder:${userId}:${dedupeDate}`,
+          channel: "telegram",
+          scheduledFor: reminderIso,
+        },
+      });
     }
   }
 
@@ -67,16 +122,43 @@ async function runDailyRewardSideEffects(userId: string, rewardRow: ClaimDailyRe
 
   if (leaderboardStateResult.error) {
     console.error("[DailyReward API] Failed to sync leaderboard presence", leaderboardStateResult.error.message);
+    await queueJob({
+      eventType: "leaderboard_presence_sync_failed",
+      message: leaderboardStateResult.error.message,
+      jobType: "sync_leaderboard_presence",
+      dedupeKey: `daily-reward:leaderboard:${userId}`,
+      payload: {
+        profileId: userId,
+      },
+    });
   }
 
   const weeklyTitlesRefreshResult = await admin.rpc("refresh_weekly_titles");
   if (weeklyTitlesRefreshResult.error) {
     console.error("[DailyReward API] Failed to refresh weekly titles", weeklyTitlesRefreshResult.error.message);
+    await queueJob({
+      eventType: "weekly_titles_refresh_failed",
+      message: weeklyTitlesRefreshResult.error.message,
+      jobType: "refresh_weekly_titles",
+      dedupeKey: `daily-reward:weekly-refresh:${userId}:${new Date().toISOString().slice(0, 13)}`,
+      payload: {
+        profileId: userId,
+      },
+    });
   }
 
   const weeklyMomentsResult = await admin.rpc("emit_active_weekly_title_moments");
   if (weeklyMomentsResult.error) {
     console.error("[DailyReward API] Failed to emit weekly title moments", weeklyMomentsResult.error.message);
+    await queueJob({
+      eventType: "weekly_title_moments_failed",
+      message: weeklyMomentsResult.error.message,
+      jobType: "emit_weekly_title_moments",
+      dedupeKey: `daily-reward:weekly-moments:${userId}:${new Date().toISOString().slice(0, 10)}`,
+      payload: {
+        profileId: userId,
+      },
+    });
   }
 
   const referralResult = await admin.rpc("activate_referral_if_eligible", {
@@ -90,9 +172,29 @@ async function runDailyRewardSideEffects(userId: string, rewardRow: ClaimDailyRe
 
   if (referralResult.error) {
     console.error("[DailyReward API] Failed to activate referral", referralResult.error.message);
+    await queueJob({
+      eventType: "referral_activation_failed",
+      message: referralResult.error.message,
+      jobType: "activate_referral",
+      dedupeKey: `daily-reward:referral:${userId}:${new Date().toISOString().slice(0, 10)}`,
+      payload: {
+        inviteeId: userId,
+        source: "daily_reward",
+        context: {
+          source: "daily_reward",
+          streak: Number(rewardRow.streak || 0),
+        },
+      },
+    });
   }
 
-  await drainPendingNotificationQueue();
+  await drainRuntimeReliabilityWork({
+    source: "daily-reward-after",
+  });
+
+  if (queuedFollowUp) {
+    await scheduleInternalRuntimeDrain("daily-reward-follow-up");
+  }
 }
 
 export async function POST(request: Request) {
@@ -113,11 +215,15 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (userError) {
-    return NextResponse.json({ error: "Не удалось проверить сессию" }, { status: 401 });
+    return buildApiErrorResponse(401, "Не удалось проверить сессию.", {
+      code: "SESSION_CHECK_FAILED",
+    });
   }
 
   if (!user) {
-    return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    return buildApiErrorResponse(401, API_ERROR_MESSAGES.unauthorized, {
+      code: "UNAUTHORIZED",
+    });
   }
 
   const moderationState = await getProfileModerationState(user.id);
@@ -132,10 +238,12 @@ export async function POST(request: Request) {
       message: "Daily reward blocked because profile is limited",
     });
 
-    return NextResponse.json({ error: "РџСЂРѕС„РёР»СЊ РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РµРЅ" }, { status: 403 });
+    return buildApiErrorResponse(403, API_ERROR_MESSAGES.profileLimited, {
+      code: "PROFILE_LIMITED",
+    });
   }
 
-  const userLimit = consumeRateLimit({
+  const userLimit = await consumePersistentRateLimit({
     key: `daily-reward:user:${user.id}`,
     limit: 3,
     windowMs: 10_000,
@@ -162,6 +270,7 @@ export async function POST(request: Request) {
         hint: error.hint,
       },
     });
+
     const dbMessage = typeof error.message === "string" ? error.message : "";
     const normalized = dbMessage.toLowerCase();
     const notFound = normalized.includes("profile not found");
@@ -176,22 +285,36 @@ export async function POST(request: Request) {
       hint: error.hint,
     });
 
-    return NextResponse.json(
+    return buildApiErrorResponse(
+      notFound ? 404 : fnMissing ? 501 : permissionError ? 403 : 500,
+      notFound
+        ? "Профиль не найден."
+        : fnMissing
+          ? "Функция ежедневной награды не найдена в базе. Примени актуальные миграции."
+          : permissionError
+            ? "Недостаточно прав для получения ежедневной награды."
+            : dbMessage || "Не удалось получить ежедневную награду.",
       {
-        error: notFound
-          ? "Профиль не найден"
+        code: notFound
+          ? "PROFILE_NOT_FOUND"
           : fnMissing
-            ? "Функция ежедневной награды не найдена в БД. Примени актуальные миграции."
+            ? "FUNCTION_MISSING"
             : permissionError
-              ? "Недостаточно прав для получения ежедневной награды."
-              : dbMessage || "Не удалось получить ежедневную награду",
+              ? "FORBIDDEN"
+              : "DAILY_REWARD_FAILED",
       },
-      { status: notFound ? 404 : fnMissing ? 501 : permissionError ? 403 : 500 },
     );
   }
 
   const rewardRow = (data || {}) as ClaimDailyRewardRow;
   const claimed = Boolean(rewardRow.claimed);
+
+  invalidateRuntimeCache([
+    "discover:v2",
+    "leaderboard-full:v2",
+    "leaderboard-preview:v2",
+    "landing-stats:v2",
+  ]);
 
   if (claimed) {
     after(async () => {
@@ -199,23 +322,5 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json({
-    success: true,
-    claimed,
-    reward: Number(rewardRow.reward || 0),
-    streak: Number(rewardRow.streak || 0),
-    nextReward: Number(rewardRow.next_reward || 0),
-    lastRewardAt: rewardRow.last_reward_at ?? null,
-    availableAt: rewardRow.available_at ?? null,
-    baseReward: Number(rewardRow.base_reward || 0),
-    bonusReward: Number(rewardRow.bonus_reward || 0),
-    bonuses: {
-      streakMilestone: Number(rewardRow.streak_milestone_reward || 0),
-      weeklyActivity: Number(rewardRow.weekly_reward || 0),
-      achievements: Number(rewardRow.achievement_reward || 0),
-    },
-    unlockedAchievements: Array.isArray(rewardRow.unlocked_achievements)
-      ? rewardRow.unlocked_achievements.filter((item): item is string => typeof item === "string" && item.length > 0)
-      : [],
-  });
+  return buildApiSuccessResponse(buildDailyRewardSuccessPayload(rewardRow));
 }

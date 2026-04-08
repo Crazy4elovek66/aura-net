@@ -228,6 +228,7 @@ export default function UniversalCreatorCard({
                      }`}
                   >
                      {data.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- Share capture depends on a real DOM img tag that html-to-image can inline reliably.
                         <img 
                            src={data.avatarUrl} 
                            alt={data.displayName}

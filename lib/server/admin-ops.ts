@@ -95,6 +95,8 @@ export async function loadAdminOpsSnapshot() {
     rewards24hResult,
     pendingNotificationsResult,
     failedNotifications24hResult,
+    pendingRuntimeJobsResult,
+    failedRuntimeJobs24hResult,
     criticalEvents24hResult,
     limitedProfilesCountResult,
     discoverHiddenCountResult,
@@ -115,6 +117,8 @@ export async function loadAdminOpsSnapshot() {
     admin.from("transactions").select("id", { count: "exact", head: true }).eq("type", "daily_reward").gte("created_at", last24hIso),
     admin.from("notification_events").select("id", { count: "exact", head: true }).eq("status", "pending"),
     admin.from("notification_events").select("id", { count: "exact", head: true }).eq("status", "failed").gte("created_at", last24hIso),
+    admin.from("runtime_jobs").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    admin.from("runtime_jobs").select("id", { count: "exact", head: true }).eq("status", "failed").gte("created_at", last24hIso),
     admin
       .from("ops_events")
       .select("id", { count: "exact", head: true })
@@ -165,6 +169,8 @@ export async function loadAdminOpsSnapshot() {
     rewards24hResult,
     pendingNotificationsResult,
     failedNotifications24hResult,
+    pendingRuntimeJobsResult,
+    failedRuntimeJobs24hResult,
     criticalEvents24hResult,
     limitedProfilesCountResult,
     discoverHiddenCountResult,
@@ -394,6 +400,8 @@ export async function loadAdminOpsSnapshot() {
       rewards24h: Number(rewards24hResult.count || 0),
       pendingNotifications: Number(pendingNotificationsResult.count || 0),
       failedNotifications24h: Number(failedNotifications24hResult.count || 0),
+      pendingRuntimeJobs: Number(pendingRuntimeJobsResult.count || 0),
+      failedRuntimeJobs24h: Number(failedRuntimeJobs24hResult.count || 0),
       limitedProfiles: Number(limitedProfilesCountResult.count || 0),
       hiddenFromDiscover: Number(discoverHiddenCountResult.count || 0),
       hiddenFromLeaderboards: Number(leaderboardHiddenCountResult.count || 0),

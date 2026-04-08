@@ -1,28 +1,13 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
+import { normalizeReferralCode, parseTmaUser, parseWidgetUser, type AuthPayload } from "@/lib/auth/telegram-auth";
 import { createOpsEvent } from "@/lib/server/ops-events";
+import { API_ERROR_MESSAGES, buildApiErrorResponse } from "@/lib/server/route-response";
+import { scheduleInternalRuntimeDrain } from "@/lib/server/runtime-reliability";
+import { enqueueRuntimeJob } from "@/lib/server/runtime-jobs";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { buildTelegramProfilePatch, type TelegramProfileInput } from "@/lib/auth/telegram-profile";
 import { createClient } from "@supabase/supabase-js";
-
-interface TelegramUserData {
-  id: number;
-  first_name?: string;
-  username?: string;
-  photo_url?: string | null;
-  start_param?: string | null;
-}
-
-interface AuthPayload {
-  initData?: string;
-  hash?: string;
-  id?: string | number;
-  first_name?: string;
-  username?: string;
-  photo_url?: string;
-  next?: string;
-  [key: string]: unknown;
-}
 
 interface AuthResult {
   email: string;
@@ -48,84 +33,13 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return "Unknown error";
+  return "Неизвестная ошибка";
 }
 
 function isSafeNextPath(value: string | null | undefined) {
   return Boolean(value && value.startsWith("/") && !value.startsWith("//"));
 }
 
-function normalizeReferralCode(value: string | null | undefined) {
-  if (!value) return null;
-  const normalized = value.trim();
-  if (!normalized) return null;
-  return normalized.startsWith("ref_") ? normalized.slice(4) : normalized;
-}
-
-function parseTmaUser(data: AuthPayload, botToken: string): TelegramUserData {
-  const initData = typeof data.initData === "string" ? data.initData : "";
-  if (!initData) {
-    throw new Error("Missing initData");
-  }
-
-  const urlParams = new URLSearchParams(initData);
-  const hash = urlParams.get("hash");
-  urlParams.delete("hash");
-
-  const dataCheckString = Array.from(urlParams.entries())
-    .map(([key, value]) => `${key}=${value}`)
-    .sort()
-    .join("\n");
-
-  const secretKey = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
-  const calculatedHash = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
-
-  if (!hash || calculatedHash !== hash) {
-    throw new Error("Invalid TMA hash");
-  }
-
-  const userString = urlParams.get("user");
-  if (!userString) {
-    throw new Error("User data missing in initData");
-  }
-
-  const tgUser = JSON.parse(userString) as TelegramUserData;
-
-  return {
-    id: tgUser.id,
-    first_name: tgUser.first_name,
-    username: tgUser.username,
-    photo_url: tgUser.photo_url || null,
-    start_param: urlParams.get("start_param"),
-  };
-}
-
-function parseWidgetUser(data: AuthPayload, botToken: string): TelegramUserData {
-  const hash = typeof data.hash === "string" ? data.hash : "";
-  if (!hash) {
-    throw new Error("No hash provided");
-  }
-
-  const dataCheckString = Object.keys(data)
-    .filter((key) => key !== "hash" && key !== "next" && key !== "ref")
-    .sort()
-    .map((key) => `${key}=${String(data[key] ?? "")}`)
-    .join("\n");
-
-  const secretKey = crypto.createHash("sha256").update(botToken).digest();
-  const calculatedHash = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
-
-  if (calculatedHash !== hash) {
-    throw new Error("Invalid Widget hash");
-  }
-
-  return {
-    id: Number(data.id),
-    first_name: typeof data.first_name === "string" ? data.first_name : "",
-    username: typeof data.username === "string" ? data.username : "",
-    photo_url: typeof data.photo_url === "string" ? data.photo_url : null,
-  };
-}
 
 async function handleTelegramAuth(data: AuthPayload, botToken: string, isTma: boolean): Promise<AuthResult> {
   const userData = isTma ? parseTmaUser(data, botToken) : parseWidgetUser(data, botToken);
@@ -230,6 +144,22 @@ async function syncTelegramProfile(authResult: AuthResult, referralCode?: string
           referralCode: effectiveReferralCode,
         },
       });
+      try {
+        await enqueueRuntimeJob({
+          jobType: "bind_referral",
+          dedupeKey: `telegram-auth:referral-bind:${user.id}:${effectiveReferralCode}`,
+          payload: {
+            inviteeId: user.id,
+            inviteCode: effectiveReferralCode,
+            context: {
+              source: "telegram_auth",
+            },
+          },
+        });
+        await scheduleInternalRuntimeDrain("telegram-auth-referral-bind");
+      } catch (queueError) {
+        console.error("[Auth API] Failed to queue referral bind retry", queueError);
+      }
     }
   }
 
@@ -276,7 +206,9 @@ export async function POST(request: Request) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
 
   if (!botToken) {
-    return NextResponse.json({ error: "Server config error" }, { status: 500 });
+    return buildApiErrorResponse(500, API_ERROR_MESSAGES.serverConfig, {
+      code: "SERVER_CONFIG",
+    });
   }
 
   try {
@@ -297,6 +229,8 @@ export async function POST(request: Request) {
       requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
       message,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return buildApiErrorResponse(500, message, {
+      code: "TELEGRAM_AUTH_FAILED",
+    });
   }
 }

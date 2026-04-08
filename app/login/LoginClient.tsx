@@ -8,6 +8,8 @@ import { createClient } from "@/lib/supabase/client";
 import { buildTelegramProfilePatch, type TelegramProfileInput } from "@/lib/auth/telegram-profile";
 import { useNotice } from "@/components/notice/NoticeProvider";
 
+const supabase = createClient();
+
 type TelegramWebApp = {
   initData?: string;
 };
@@ -30,13 +32,13 @@ function getErrorMessage(error: unknown, fallback: string) {
 function mapLoginError(errorCode: string | null, reason: string | null) {
   switch (errorCode) {
     case "config":
-      return "Браузерный вход сейчас недоступен: серверный Telegram auth не настроен.";
+      return "Вход через браузер сейчас не работает: серверная Telegram-авторизация не настроена.";
     case "telegram_widget_failed":
-      return reason ? `Telegram login не завершился: ${reason}` : "Telegram login не завершился.";
+      return reason ? `Вход через Telegram сорвался: ${reason}` : "Вход через Telegram сорвался.";
     case "exchange_failed":
-      return "Не удалось обменять auth code на сессию.";
+      return "Не получилось обменять код авторизации на сессию.";
     case "no_session":
-      return "Сессия после авторизации не появилась.";
+      return "Сессия после входа не появилась. Попробуй ещё раз.";
     default:
       return null;
   }
@@ -57,7 +59,6 @@ export default function LoginClient({
   const [error, setError] = useState<string | null>(null);
   const scriptContainerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const supabase = createClient();
   const { notify } = useNotice();
   const browserLoginAvailable = Boolean(process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME);
 
@@ -69,7 +70,7 @@ export default function LoginClient({
       .maybeSingle();
 
     return !profile || profile.is_nickname_selected === false ? "/setup-profile" : "/profile";
-  }, [supabase]);
+  }, []);
 
   const syncTelegramProfile = useCallback(async (userId: string, profile?: TelegramProfileInput) => {
     if (!profile) return;
@@ -87,24 +88,21 @@ export default function LoginClient({
     if (updateError) {
       console.error("[Login] Telegram profile sync failed", updateError.message);
     }
-  }, [supabase]);
+  }, []);
 
-  const bindReferral = useCallback(
-    async (code: string | null | undefined) => {
-      if (!code) return;
+  const bindReferral = useCallback(async (code: string | null | undefined) => {
+    if (!code) return;
 
-      try {
-        await fetch("/api/referrals/bind", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code }),
-        });
-      } catch (error) {
-        console.error("[Login] Failed to bind referral", error);
-      }
-    },
-    [],
-  );
+    try {
+      await fetch("/api/referrals/bind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+    } catch (error) {
+      console.error("[Login] Failed to bind referral", error);
+    }
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -113,6 +111,7 @@ export default function LoginClient({
     if (externalError) {
       setError(externalError);
       setLoading(false);
+      return;
     }
 
     let isActive = true;
@@ -152,7 +151,7 @@ export default function LoginClient({
           };
 
           if (!response.ok || !payload.email || !payload.password) {
-            throw new Error(payload.error || "Сбой Telegram auth API");
+            throw new Error(payload.error || "Сервис Telegram-авторизации временно не ответил");
           }
 
           const signInResult = await supabase.auth.signInWithPassword({
@@ -188,7 +187,7 @@ export default function LoginClient({
 
       if (!browserLoginAvailable) {
         setLoading(false);
-        setError("Браузерный вход отключён: у приложения не задан публичный bot username. Открой Aura.net через Telegram Mini App.");
+        setError("Браузерный вход здесь выключен. Открой Aura.net внутри Telegram Mini App.");
         return;
       }
 
@@ -222,7 +221,7 @@ export default function LoginClient({
         clearTimeout(widgetTimer);
       }
     };
-  }, [bindReferral, browserLoginAvailable, errorCode, errorReason, notify, referralCode, resolvePostLoginPath, router, supabase, syncTelegramProfile]);
+  }, [bindReferral, browserLoginAvailable, errorCode, errorReason, notify, referralCode, resolvePostLoginPath, router, syncTelegramProfile]);
 
   if (!mounted) return null;
 
@@ -247,10 +246,20 @@ export default function LoginClient({
             </h1>
           </Link>
 
-          <h2 className="text-2xl font-bold mb-3">{tmaDetected ? "Авторизация..." : "Добро пожаловать"}</h2>
+          <h2 className="text-2xl font-bold mb-3">{tmaDetected ? "Входим..." : "Добро пожаловать"}</h2>
           <p className="text-muted mb-10 italic text-sm">
-            {tmaDetected ? "Входим через Telegram" : "Вход только через подтверждённый Telegram-аккаунт"}
+            {tmaDetected ? "Подтверждаем вход через Telegram" : "Вход только через подтверждённый Telegram-аккаунт"}
           </p>
+
+          {referralCode ? (
+            <div className="mb-6 rounded-2xl border border-neon-green/25 bg-neon-green/[0.08] p-4 text-left">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neon-green/90">Вход по приглашению</p>
+              <p className="mt-2 text-[11px] leading-relaxed text-white/72">
+                Инвайт уже подхватится автоматически. После первого daily claim и первого живого действия внутри продукта
+                активируется welcome bonus для тебя и reward для пригласившего.
+              </p>
+            </div>
+          ) : null}
 
           <div className="flex flex-col items-center justify-center min-h-[120px] gap-6">
             {error ? (
@@ -268,7 +277,7 @@ export default function LoginClient({
                   className="w-8 h-8 border-4 border-neon-purple border-t-transparent rounded-full"
                 />
                 <span className="text-muted text-xs uppercase tracking-widest font-bold">
-                  {tmaDetected ? "Проверяем Telegram..." : "Инициализация..."}
+                  {tmaDetected ? "Проверяем Telegram..." : "Запускаем вход..."}
                 </span>
               </div>
             ) : null}
@@ -282,9 +291,9 @@ export default function LoginClient({
 
             {!browserLoginAvailable && !tmaDetected ? (
               <div className="rounded-2xl border border-amber-300/30 bg-amber-300/10 p-4 text-left">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200">Browser path ограничен</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200">Вход только из Telegram</p>
                 <p className="mt-2 text-[11px] leading-relaxed text-white/70">
-                  Этот деплой сейчас поддерживает только вход внутри Telegram Mini App. Снаружи не показываем сломанный widget flow.
+                  Этот деплой сейчас рассчитан только на Telegram Mini App. Снаружи не показываем сломанный виджет и не ведём в тупик.
                 </p>
               </div>
             ) : null}

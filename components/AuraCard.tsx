@@ -30,7 +30,7 @@ interface AuraCardProps {
 const supabase = createClient();
 
 function isActiveUntil(iso: string | null | undefined): boolean {
-  return Boolean(iso);
+  return Boolean(iso && new Date(iso).getTime() > Date.now());
 }
 
 function formatEffectUntil(iso: string | null | undefined): string {
@@ -97,6 +97,40 @@ export default function AuraCard({
   }, [isEditing]);
 
   useEffect(() => {
+    setAuraPoints(initialAura);
+  }, [initialAura]);
+
+  useEffect(() => {
+    setUpVotes(initialUp);
+  }, [initialUp]);
+
+  useEffect(() => {
+    setDownVotes(initialDown);
+  }, [initialDown]);
+
+  useEffect(() => {
+    setHasVoted(initialHasVoted);
+  }, [initialHasVoted]);
+
+  useEffect(() => {
+    setStatus(initialStatus);
+    if (!isEditingStatus) {
+      setStatusValue(initialStatus || "");
+    }
+  }, [initialStatus, isEditingStatus]);
+
+  useEffect(() => {
+    setSpecialCard(initialSpecialCard);
+  }, [initialSpecialCard]);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setCurrentDisplayName(displayName);
+      setEditValue(displayName);
+    }
+  }, [displayName, isEditing]);
+
+  useEffect(() => {
     if (!profileId) return;
 
     const channel = supabase
@@ -138,7 +172,7 @@ export default function AuraCard({
     notify({
       variant: "error",
       title: "Имя не обновлено",
-      message: "Не удалось сохранить display name.",
+      message: "Не удалось сохранить имя профиля.",
     });
     setLoading(false);
   };

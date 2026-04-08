@@ -1,11 +1,71 @@
 import { BOOST_COST, BOOST_DURATION_MINUTES } from "@/lib/economy";
 import { createOpsEvent } from "@/lib/server/ops-events";
 import { getProfileModerationState, isProfileLimited } from "@/lib/server/profile-moderation";
-import { consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
-import { buildRateLimitResponse } from "@/lib/server/route-response";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { consumePersistentRateLimit, consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
+import {
+  API_ERROR_MESSAGES,
+  buildApiErrorResponse,
+  buildApiSuccessResponse,
+  buildRateLimitResponse,
+} from "@/lib/server/route-response";
+import { invalidateRuntimeCache } from "@/lib/server/runtime-cache";
 import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
+
+interface ActivateBoostRow {
+  boost_id?: string | null;
+  expires_at?: string | null;
+  aura_left?: number | null;
+}
+
+function mapBoostRpcError(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("insufficient aura")) {
+    return {
+      status: 403,
+      code: "INSUFFICIENT_AURA",
+      error: `Недостаточно ауры для фокуса. Нужно ${BOOST_COST}.`,
+    };
+  }
+
+  if (normalized.includes("boost already active")) {
+    return {
+      status: 429,
+      code: "BOOST_ALREADY_ACTIVE",
+      error: "Фокус уже активен. Дождись окончания текущего.",
+    };
+  }
+
+  if (normalized.includes("profile not found")) {
+    return {
+      status: 404,
+      code: "PROFILE_NOT_FOUND",
+      error: "Профиль не найден.",
+    };
+  }
+
+  if (normalized.includes("not allowed")) {
+    return {
+      status: 403,
+      code: "FORBIDDEN",
+      error: "Только владелец профиля может включить фокус.",
+    };
+  }
+
+  if (normalized.includes("function") && normalized.includes("does not exist")) {
+    return {
+      status: 501,
+      code: "FUNCTION_MISSING",
+      error: "Функция активации фокуса не найдена. Примени актуальные миграции.",
+    };
+  }
+
+  return {
+    status: 500,
+    code: "BOOST_CREATE_FAILED",
+    error: "Не удалось активировать фокус.",
+  };
+}
 
 export async function POST(request: Request) {
   const burstLimit = consumeRateLimit({
@@ -19,26 +79,22 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  let admin: ReturnType<typeof createAdminClient>;
-
-  try {
-    admin = createAdminClient();
-  } catch {
-    return NextResponse.json({ error: "Ошибка конфигурации сервера" }, { status: 500 });
-  }
-
   let payload: { profileId?: unknown };
 
   try {
     payload = await request.json();
   } catch {
-    return NextResponse.json({ error: "Некорректный JSON" }, { status: 400 });
+    return buildApiErrorResponse(400, API_ERROR_MESSAGES.invalidJson, {
+      code: "INVALID_JSON",
+    });
   }
 
-  const profileId = typeof payload.profileId === "string" ? payload.profileId : "";
+  const profileId = typeof payload.profileId === "string" ? payload.profileId.trim() : "";
 
   if (!profileId) {
-    return NextResponse.json({ error: "Не указан profileId" }, { status: 400 });
+    return buildApiErrorResponse(400, "Не указан profileId.", {
+      code: "PROFILE_ID_REQUIRED",
+    });
   }
 
   const {
@@ -46,7 +102,9 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user || user.id !== profileId) {
-    return NextResponse.json({ error: "Только владелец может включить фокус" }, { status: 403 });
+    return buildApiErrorResponse(403, "Только владелец профиля может включить фокус.", {
+      code: "FORBIDDEN",
+    });
   }
 
   const moderationState = await getProfileModerationState(user.id);
@@ -61,10 +119,12 @@ export async function POST(request: Request) {
       message: "Boost activation blocked because profile is limited",
     });
 
-    return NextResponse.json({ error: "РџСЂРѕС„РёР»СЊ РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РµРЅ" }, { status: 403 });
+    return buildApiErrorResponse(403, API_ERROR_MESSAGES.profileLimited, {
+      code: "PROFILE_LIMITED",
+    });
   }
 
-  const userLimit = consumeRateLimit({
+  const userLimit = await consumePersistentRateLimit({
     key: `boost:user:${user.id}`,
     limit: 3,
     windowMs: 10_000,
@@ -74,115 +134,48 @@ export async function POST(request: Request) {
     return buildRateLimitResponse("Слишком много попыток включить фокус. Подожди несколько секунд.", userLimit);
   }
 
-  const nowIso = new Date().toISOString();
-
-  const { data: activeBoost, error: activeBoostError } = await supabase
-    .from("boosts")
-    .select("expires_at")
-    .eq("profile_id", profileId)
-    .gt("expires_at", nowIso)
-    .order("expires_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (activeBoostError) {
-    return NextResponse.json({ error: "Не удалось проверить активный фокус" }, { status: 500 });
-  }
-
-  if (activeBoost?.expires_at) {
-    return NextResponse.json(
-      {
-        error: "Фокус уже активен. Дождись окончания текущего.",
-        cooldownUntil: activeBoost.expires_at,
-      },
-      { status: 429 },
-    );
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("aura_points")
-    .eq("id", profileId)
-    .single();
-
-  if (profileError) {
-    return NextResponse.json({ error: "Не удалось получить профиль" }, { status: 500 });
-  }
-
-  if ((profile?.aura_points || 0) < BOOST_COST) {
-    return NextResponse.json({ error: `Недостаточно ауры для фокуса (нужно ${BOOST_COST})` }, { status: 403 });
-  }
-
-  const { error: auraDeductError } = await supabase.rpc("increment_aura", {
-    target_id: profileId,
-    amount: -BOOST_COST,
-  });
-
-  if (auraDeductError) {
-    return NextResponse.json({ error: "Ошибка списания ауры" }, { status: 500 });
-  }
-
-  const expiresAt = new Date(Date.now() + BOOST_DURATION_MINUTES * 60 * 1000).toISOString();
-
-  const { data: boostRow, error: boostInsertError } = await supabase
-    .from("boosts")
-    .insert({
-      profile_id: profileId,
-      expires_at: expiresAt,
+  const { data, error } = await supabase
+    .rpc("activate_profile_boost", {
+      p_profile_id: profileId,
+      p_cost: BOOST_COST,
+      p_duration_minutes: BOOST_DURATION_MINUTES,
     })
-    .select("id")
     .single();
 
-  if (boostInsertError) {
+  if (error) {
     await createOpsEvent({
       level: "error",
       scope: "boost",
-      eventType: "boost_insert_failed",
+      eventType: "boost_activation_failed",
       profileId,
       actorId: user.id,
       requestPath: new URL(request.url).pathname,
       requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
-      message: boostInsertError.message,
-    });
-    await admin.rpc("increment_aura", { target_id: profileId, amount: BOOST_COST });
-    return NextResponse.json({ error: "Не удалось активировать фокус" }, { status: 500 });
-  }
-
-  if (!boostRow) {
-    await admin.rpc("increment_aura", { target_id: profileId, amount: BOOST_COST });
-    return NextResponse.json({ error: "Не удалось создать запись фокуса" }, { status: 500 });
-  }
-
-  const { error: transactionError } = await supabase.from("transactions").insert({
-    user_id: user.id,
-    amount: -BOOST_COST,
-    type: "spotlight",
-    description: `Активация фокуса (${BOOST_DURATION_MINUTES} минут)`,
-    metadata: {
-      source: "spotlight",
-      boostId: boostRow.id,
-      durationMinutes: BOOST_DURATION_MINUTES,
-    },
-  });
-
-  if (transactionError) {
-    await createOpsEvent({
-      level: "error",
-      scope: "boost",
-      eventType: "boost_transaction_failed",
-      profileId,
-      actorId: user.id,
-      requestPath: new URL(request.url).pathname,
-      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
-      message: transactionError.message,
+      message: error.message,
       payload: {
-        boostId: boostRow.id,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
       },
     });
-    await admin.from("boosts").delete().eq("id", boostRow.id);
-    await admin.rpc("increment_aura", { target_id: profileId, amount: BOOST_COST });
-    return NextResponse.json({ error: "Не удалось записать фокус в историю" }, { status: 500 });
+
+    const mapped = mapBoostRpcError(error.message || "");
+    return buildApiErrorResponse(mapped.status, mapped.error, {
+      code: mapped.code,
+    });
   }
 
-  return NextResponse.json({ success: true, expiresAt });
+  const row = (data || {}) as ActivateBoostRow;
+
+  invalidateRuntimeCache([
+    "leaderboard-full:v2",
+    "leaderboard-preview:v2",
+    "discover:v2",
+    "landing-stats:v2",
+  ]);
+
+  return buildApiSuccessResponse({
+    expiresAt: row.expires_at ?? null,
+    auraLeft: Number(row.aura_left || 0),
+  });
 }

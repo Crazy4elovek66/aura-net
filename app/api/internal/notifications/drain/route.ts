@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { drainPendingNotificationQueue } from "@/lib/server/notification-delivery";
 import { createOpsEvent } from "@/lib/server/ops-events";
+import { API_ERROR_MESSAGES, buildApiErrorResponse } from "@/lib/server/route-response";
+import { drainRuntimeReliabilityWork } from "@/lib/server/runtime-reliability";
 
 export async function POST(request: Request) {
   const secret = process.env.AURA_INTERNAL_CRON_SECRET;
@@ -17,10 +18,15 @@ export async function POST(request: Request) {
         requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
         message: "Notification drain request rejected by secret check",
       });
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return buildApiErrorResponse(403, API_ERROR_MESSAGES.forbidden, {
+        code: "FORBIDDEN",
+      });
     }
   }
 
-  await drainPendingNotificationQueue();
-  return NextResponse.json({ success: true });
+  const reason = request.headers.get("x-aura-drain-reason") || "internal-route";
+  const summary = await drainRuntimeReliabilityWork({
+    source: reason,
+  });
+  return NextResponse.json({ success: true, summary });
 }

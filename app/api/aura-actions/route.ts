@@ -1,10 +1,15 @@
 import { CARD_ACCENT_VARIANTS } from "@/lib/economy";
 import { createOpsEvent } from "@/lib/server/ops-events";
 import { getProfileModerationState, isProfileLimited } from "@/lib/server/profile-moderation";
-import { consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
-import { buildRateLimitResponse } from "@/lib/server/route-response";
+import { consumePersistentRateLimit, consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
+import {
+  API_ERROR_MESSAGES,
+  buildApiErrorResponse,
+  buildApiSuccessResponse,
+  buildRateLimitResponse,
+} from "@/lib/server/route-response";
+import { invalidateRuntimeCache } from "@/lib/server/runtime-cache";
 import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
 
 type AuraAction = "decay_shield" | "streak_save" | "card_accent";
 
@@ -32,16 +37,21 @@ function mapRpcError(message: string) {
   if (normalized.includes("could not find the function") && normalized.includes("schema cache")) {
     return {
       status: 501,
+      code: "FUNCTION_MISSING",
       error: "Функция не найдена в schema cache Supabase. Примени миграции и обнови кэш API.",
     };
   }
 
   if (normalized.includes("function") && normalized.includes("does not exist")) {
-    return { status: 501, error: "Функция не найдена в БД. Примени актуальные миграции." };
+    return {
+      status: 501,
+      code: "FUNCTION_MISSING",
+      error: "Функция не найдена в базе. Примени актуальные миграции.",
+    };
   }
 
   if (normalized.includes("insufficient aura")) {
-    return { status: 403, error: "Недостаточно ауры" };
+    return { status: 403, code: "INSUFFICIENT_AURA", error: "Недостаточно ауры." };
   }
 
   if (
@@ -49,7 +59,11 @@ function mapRpcError(message: string) {
     normalized.includes("on cooldown") ||
     normalized.includes("already active until")
   ) {
-    return { status: 429, error: "Эффект уже активен или еще на cooldown" };
+    return {
+      status: 429,
+      code: "ACTION_ON_COOLDOWN",
+      error: "Эффект уже активен или ещё находится на перезарядке.",
+    };
   }
 
   if (
@@ -57,18 +71,22 @@ function mapRpcError(message: string) {
     normalized.includes("no streak to rescue") ||
     normalized.includes("unsupported accent variant")
   ) {
-    return { status: 400, error: "Условия для покупки не выполнены" };
+    return {
+      status: 400,
+      code: "ACTION_PRECONDITION_FAILED",
+      error: "Условия для этой траты сейчас не выполнены.",
+    };
   }
 
   if (normalized.includes("not allowed")) {
-    return { status: 403, error: "Недостаточно прав" };
+    return { status: 403, code: "FORBIDDEN", error: API_ERROR_MESSAGES.forbidden };
   }
 
   if (normalized.includes("profile not found")) {
-    return { status: 404, error: "Профиль не найден" };
+    return { status: 404, code: "PROFILE_NOT_FOUND", error: "Профиль не найден." };
   }
 
-  return { status: 500, error: message || "Не удалось выполнить трату ауры" };
+  return { status: 500, code: "AURA_ACTION_FAILED", error: message || "Не удалось выполнить трату ауры." };
 }
 
 export async function POST(request: Request) {
@@ -90,7 +108,9 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    return buildApiErrorResponse(401, API_ERROR_MESSAGES.unauthorized, {
+      code: "UNAUTHORIZED",
+    });
   }
 
   const moderationState = await getProfileModerationState(user.id);
@@ -105,10 +125,12 @@ export async function POST(request: Request) {
       message: "Aura action blocked because profile is limited",
     });
 
-    return NextResponse.json({ error: "РџСЂРѕС„РёР»СЊ РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РµРЅ" }, { status: 403 });
+    return buildApiErrorResponse(403, API_ERROR_MESSAGES.profileLimited, {
+      code: "PROFILE_LIMITED",
+    });
   }
 
-  const userLimit = consumeRateLimit({
+  const userLimit = await consumePersistentRateLimit({
     key: `aura-actions:user:${user.id}`,
     limit: 5,
     windowMs: 10_000,
@@ -123,7 +145,9 @@ export async function POST(request: Request) {
   try {
     payload = await request.json();
   } catch {
-    return NextResponse.json({ error: "Некорректный JSON" }, { status: 400 });
+    return buildApiErrorResponse(400, API_ERROR_MESSAGES.invalidJson, {
+      code: "INVALID_JSON",
+    });
   }
 
   const action =
@@ -132,7 +156,9 @@ export async function POST(request: Request) {
       : null;
 
   if (!action) {
-    return NextResponse.json({ error: "Неизвестное действие" }, { status: 400 });
+    return buildApiErrorResponse(400, "Неизвестное действие.", {
+      code: "UNKNOWN_ACTION",
+    });
   }
 
   if (action === "decay_shield") {
@@ -153,13 +179,19 @@ export async function POST(request: Request) {
         message: error.message,
       });
       const mapped = mapRpcError(error.message || "");
-      return NextResponse.json({ error: mapped.error }, { status: mapped.status });
+      return buildApiErrorResponse(mapped.status, mapped.error, { code: mapped.code });
     }
 
     const row = (data || {}) as DecayShieldRow;
 
-    return NextResponse.json({
-      success: true,
+    invalidateRuntimeCache([
+      "leaderboard-full:v2",
+      "leaderboard-preview:v2",
+      "discover:v2",
+      "landing-stats:v2",
+    ]);
+
+    return buildApiSuccessResponse({
       action,
       expiresAt: row.expires_at ?? null,
       auraLeft: Number(row.aura_left || 0),
@@ -184,13 +216,19 @@ export async function POST(request: Request) {
         message: error.message,
       });
       const mapped = mapRpcError(error.message || "");
-      return NextResponse.json({ error: mapped.error }, { status: mapped.status });
+      return buildApiErrorResponse(mapped.status, mapped.error, { code: mapped.code });
     }
 
     const row = (data || {}) as StreakSaveRow;
 
-    return NextResponse.json({
-      success: true,
+    invalidateRuntimeCache([
+      "leaderboard-full:v2",
+      "leaderboard-preview:v2",
+      "discover:v2",
+      "landing-stats:v2",
+    ]);
+
+    return buildApiSuccessResponse({
       action,
       streak: Number(row.streak || 0),
       lastRewardAt: row.last_reward_at ?? null,
@@ -205,7 +243,9 @@ export async function POST(request: Request) {
     : null;
 
   if (!variant) {
-    return NextResponse.json({ error: "Некорректный вариант акцента" }, { status: 400 });
+    return buildApiErrorResponse(400, "Некорректный вариант акцента.", {
+      code: "INVALID_ACCENT_VARIANT",
+    });
   }
 
   const { data, error } = await supabase
@@ -229,13 +269,19 @@ export async function POST(request: Request) {
       },
     });
     const mapped = mapRpcError(error.message || "");
-    return NextResponse.json({ error: mapped.error }, { status: mapped.status });
+    return buildApiErrorResponse(mapped.status, mapped.error, { code: mapped.code });
   }
 
   const row = (data || {}) as CardAccentRow;
 
-  return NextResponse.json({
-    success: true,
+  invalidateRuntimeCache([
+    "leaderboard-full:v2",
+    "leaderboard-preview:v2",
+    "discover:v2",
+    "landing-stats:v2",
+  ]);
+
+  return buildApiSuccessResponse({
     action,
     variant: row.effect_variant ?? variant,
     expiresAt: row.expires_at ?? null,

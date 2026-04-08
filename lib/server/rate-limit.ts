@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createAdminClient } from "@/lib/supabase/admin";
+
 interface RateLimitBucket {
   count: number;
   resetAt: number;
@@ -76,5 +78,41 @@ export function consumeRateLimit({ key, limit, windowMs }: ConsumeRateLimitOptio
     remaining,
     retryAfterMs: Math.max(0, nextBucket.resetAt - now),
     resetAt: nextBucket.resetAt,
+  };
+}
+
+export async function consumePersistentRateLimit({
+  key,
+  limit,
+  windowMs,
+}: ConsumeRateLimitOptions): Promise<RateLimitState> {
+  const admin = createAdminClient();
+  const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
+  const { data, error } = await admin.rpc("consume_runtime_rate_limit", {
+    p_bucket_key: key,
+    p_limit: limit,
+    p_window_seconds: windowSeconds,
+  });
+
+  if (error || !Array.isArray(data) || !data[0]) {
+    if (error) {
+      console.error("[RateLimit] Persistent limiter failed, falling back to memory", error.message);
+    }
+    return consumeRateLimit({ key, limit, windowMs });
+  }
+
+  const row = data[0] as {
+    allowed?: boolean;
+    remaining?: number;
+    retry_after_seconds?: number;
+    reset_at?: string;
+  };
+
+  return {
+    allowed: Boolean(row.allowed),
+    limit,
+    remaining: Math.max(0, Number(row.remaining || 0)),
+    retryAfterMs: Math.max(0, Number(row.retry_after_seconds || 0) * 1000),
+    resetAt: row.reset_at ? new Date(row.reset_at).getTime() : Date.now() + windowMs,
   };
 }

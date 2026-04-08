@@ -3,11 +3,17 @@ import AuraSpendActionsCard from "@/components/AuraSpendActionsCard";
 import Background from "@/components/Background";
 import DailyRewardCard from "@/components/DailyRewardCard";
 import InviteLoopCard from "@/components/InviteLoopCard";
+import ProfileNextStepsCard from "@/components/ProfileNextStepsCard";
 import ShareButton from "@/components/ShareButton";
 import { getDailyRewardStatus, getStreakRescueStatus } from "@/lib/economy";
-import { drainPendingNotificationQueue } from "@/lib/server/notification-delivery";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  drainRuntimeReliabilityWork,
+  scheduleInternalRuntimeDrain,
+  shouldRunRuntimeTask,
+} from "@/lib/server/runtime-reliability";
+import { enqueueRuntimeJob } from "@/lib/server/runtime-jobs";
 import { after } from "next/server";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -20,6 +26,26 @@ interface AuraEffectRow {
   effect_type: "DECAY_SHIELD" | "CARD_ACCENT";
   effect_variant: string | null;
   expires_at: string;
+}
+
+interface ReferralRow {
+  id: string;
+  invitee_id: string;
+  status: "pending" | "activated" | "rejected";
+  joined_at: string;
+  activated_at: string | null;
+  inviter_reward: number;
+  invitee_reward: number;
+}
+
+interface InviteeProfileRow {
+  id: string;
+  username: string;
+  display_name: string | null;
+}
+
+interface InviteeClaimRow {
+  user_id: string;
 }
 
 function ProfileSecondaryFallback() {
@@ -37,9 +63,17 @@ function ProfileSecondaryFallback() {
 
 export default async function ProfilePage() {
   const supabase = await createClient();
-  const host = (await headers()).get("host");
-  const protocol = process.env.NODE_ENV === "development" ? "http" : "https";
-  const origin = `${protocol}://${host}`;
+  const headerStore = await headers();
+  const forwardedHost = headerStore.get("x-forwarded-host");
+  const forwardedProto = headerStore.get("x-forwarded-proto");
+  const host = forwardedHost || headerStore.get("host");
+  const protocol = forwardedProto || (process.env.NODE_ENV === "development" ? "http" : "https");
+  const appOriginFromEnv =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_PUBLIC_APP_URL ||
+    null;
+  const origin = appOriginFromEnv || (host ? `${protocol}://${host}` : "");
 
   const {
     data: { user },
@@ -66,19 +100,49 @@ export default async function ProfilePage() {
 
   after(async () => {
     try {
+      if (!shouldRunRuntimeTask(`profile-page-after:${user.id}`, 5_000)) {
+        return;
+      }
+
       const admin = createAdminClient();
+      let queuedFollowUp = false;
       const { error } = await admin.rpc("sync_leaderboard_presence_event", { p_profile_id: user.id });
 
       if (error) {
         console.error("[Profile Page] Failed to sync leaderboard presence", error.message);
+        queuedFollowUp = true;
+        await enqueueRuntimeJob({
+          jobType: "sync_leaderboard_presence",
+          dedupeKey: `profile-page:leaderboard:${user.id}`,
+          payload: {
+            profileId: user.id,
+          },
+        });
       }
 
       const weeklyMomentsResult = await admin.rpc("emit_active_weekly_title_moments");
       if (weeklyMomentsResult.error) {
         console.error("[Profile Page] Failed to emit weekly title moments", weeklyMomentsResult.error.message);
+        queuedFollowUp = true;
+        await enqueueRuntimeJob({
+          jobType: "emit_weekly_title_moments",
+          dedupeKey: `profile-page:weekly-moments:${user.id}:${new Date().toISOString().slice(0, 10)}`,
+          payload: {
+            profileId: user.id,
+            source: "profile_page",
+          },
+        });
       }
 
-      await drainPendingNotificationQueue(4);
+      await drainRuntimeReliabilityWork({
+        source: "profile-page-after",
+        notificationLimit: 4,
+        runtimeJobLimit: 4,
+      });
+
+      if (queuedFollowUp) {
+        await scheduleInternalRuntimeDrain("profile-page-follow-up");
+      }
     } catch (error) {
       console.error("[Profile Page] Failed to initialize admin client for leaderboard sync", error);
     }
@@ -105,8 +169,8 @@ export default async function ProfilePage() {
     votesDownResult,
     adminCheckResult,
     weeklyRewardDaysResult,
-    pendingInvitesResult,
-    activatedInvitesResult,
+    referralsResult,
+    votesCastResult,
   ] =
     await Promise.all([
       supabase
@@ -140,8 +204,13 @@ export default async function ProfilePage() {
         .eq("type", "daily_reward")
         .gte("created_at", weekStart.toISOString())
         .lt("created_at", weekEnd.toISOString()),
-      supabase.from("referrals").select("id", { count: "exact", head: true }).eq("inviter_id", user.id).eq("status", "pending"),
-      supabase.from("referrals").select("id", { count: "exact", head: true }).eq("inviter_id", user.id).eq("status", "activated"),
+      supabase
+        .from("referrals")
+        .select("id, invitee_id, status, joined_at, activated_at, inviter_reward, invitee_reward")
+        .eq("inviter_id", user.id)
+        .order("joined_at", { ascending: false })
+        .limit(8),
+      supabase.from("votes").select("id", { count: "exact", head: true }).eq("voter_id", user.id),
     ]);
 
   const activeEffects = (auraEffectsResult.data as AuraEffectRow[] | null) || [];
@@ -154,14 +223,53 @@ export default async function ProfilePage() {
   const weeklyRewardDays = new Set(
     (weeklyRewardDaysResult.data || []).map((row) => new Date(row.created_at).toISOString().slice(0, 10)),
   ).size;
-  const pendingInvites = Number(pendingInvitesResult.count || 0);
-  const activatedInvites = Number(activatedInvitesResult.count || 0);
   const inviteCode = typeof profile.invite_code === "string" ? profile.invite_code : null;
   const webInviteLink = inviteCode ? `${origin}/login?ref=${encodeURIComponent(inviteCode)}` : null;
   const telegramInviteLink =
     inviteCode && process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME
       ? `https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME}?startapp=${encodeURIComponent(`ref_${inviteCode}`)}`
       : null;
+  const profileShareLink = origin ? `${origin}/check/${profile.username}` : `/check/${profile.username}`;
+  const referralRows = (referralsResult.data as ReferralRow[] | null) || [];
+  const inviteeIds = referralRows.map((row) => row.invitee_id);
+  const [inviteeProfilesResult, inviteeClaimsResult] = await Promise.all([
+    inviteeIds.length
+      ? supabase.from("profiles").select("id, username, display_name").in("id", inviteeIds)
+      : Promise.resolve({ data: [] as InviteeProfileRow[] }),
+    inviteeIds.length
+      ? supabase.from("transactions").select("user_id").in("user_id", inviteeIds).eq("type", "daily_reward")
+      : Promise.resolve({ data: [] as InviteeClaimRow[] }),
+  ]);
+  if (referralsResult.error) {
+    console.error("[Profile Page] Failed to load referrals", referralsResult.error.message);
+  }
+  if ("error" in inviteeProfilesResult && inviteeProfilesResult.error) {
+    console.error("[Profile Page] Failed to load referral invitee profiles", inviteeProfilesResult.error.message);
+  }
+  if ("error" in inviteeClaimsResult && inviteeClaimsResult.error) {
+    console.error("[Profile Page] Failed to load referral invitee claim state", inviteeClaimsResult.error.message);
+  }
+  const inviteeProfileMap = new Map(((inviteeProfilesResult.data as InviteeProfileRow[] | null) || []).map((row) => [row.id, row]));
+  const inviteeFirstClaimSet = new Set(((inviteeClaimsResult.data as InviteeClaimRow[] | null) || []).map((row) => row.user_id));
+  const referralEntries = referralRows.map((row) => {
+    const invitee = inviteeProfileMap.get(row.invitee_id);
+
+    return {
+      id: row.id,
+      inviteeId: row.invitee_id,
+      inviteeUsername: invitee?.username || null,
+      inviteeDisplayName: invitee?.display_name || invitee?.username || `Профиль ${row.invitee_id.slice(0, 6)}`,
+      status: row.status,
+      joinedAt: row.joined_at,
+      activatedAt: row.activated_at,
+      inviterReward: Number(row.inviter_reward || 0),
+      inviteeReward: Number(row.invitee_reward || 0),
+      hasFirstClaim: inviteeFirstClaimSet.has(row.invitee_id),
+    };
+  });
+  const pendingInvites = referralEntries.filter((entry) => entry.status === "pending").length;
+  const activatedInvites = referralEntries.filter((entry) => entry.status === "activated").length;
+  const votesCast = Number(votesCastResult.count || 0);
 
   return (
     <div className="min-h-screen bg-background text-white font-unbounded relative overflow-hidden">
@@ -226,6 +334,17 @@ export default async function ProfilePage() {
             cardAccentUntil={cardAccentUntil}
           />
 
+          <ProfileNextStepsCard
+            auraPoints={profile.aura_points}
+            dailyStreak={profile.daily_streak}
+            claimedToday={dailyRewardState.claimedToday}
+            activatedInvites={activatedInvites}
+            pendingInvites={pendingInvites}
+            votesCast={votesCast}
+            profileShareLink={profileShareLink}
+            inviteLink={webInviteLink}
+          />
+
           <DailyRewardCard
             initialState={{
               canClaim: dailyRewardState.canClaim,
@@ -255,7 +374,17 @@ export default async function ProfilePage() {
           />
 
           <Suspense fallback={<ProfileSecondaryFallback />}>
-            <ProfileSecondaryPanels userId={user.id} />
+            <ProfileSecondaryPanels
+              userId={user.id}
+              auraPoints={profile.aura_points}
+              dailyStreak={profile.daily_streak}
+              referredById={profile.referred_by ?? null}
+              profileUsername={profile.username}
+              displayName={profile.display_name || profile.username}
+              profileShareLink={profileShareLink}
+              inviteLink={webInviteLink}
+              referrals={referralEntries}
+            />
           </Suspense>
 
           <div className="w-full flex flex-col items-center space-y-6 pb-20">
@@ -263,10 +392,9 @@ export default async function ProfilePage() {
               inviteCode={inviteCode}
               webInviteLink={webInviteLink}
               telegramInviteLink={telegramInviteLink}
-              pendingCount={pendingInvites}
-              activatedCount={activatedInvites}
+              referrals={referralEntries}
             />
-            <CopyLink link={`${origin}/check/${profile.username}`} />
+            <CopyLink link={profileShareLink} />
             <ShareButton username={profile.username} />
           </div>
         </main>

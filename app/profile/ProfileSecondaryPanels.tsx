@@ -1,7 +1,9 @@
 import AuraTransactions from "@/components/AuraTransactions";
 import LeaderboardPreview from "@/components/LeaderboardPreview";
+import MyCircleCard from "@/components/MyCircleCard";
 import ProfileRaceCard from "@/components/ProfileRaceCard";
 import ReengagementEventsCard from "@/components/ReengagementEventsCard";
+import ReturnPulseCard from "@/components/ReturnPulseCard";
 import ShareableMomentsCard from "@/components/ShareableMomentsCard";
 import { createClient } from "@/lib/supabase/server";
 
@@ -62,6 +64,31 @@ interface WeeklyTitleRow {
   profile_id: string;
 }
 
+interface PresenceStateRow {
+  last_rank: number | null;
+  updated_at: string;
+}
+
+interface CircleProfileRow {
+  id: string;
+  username: string;
+  display_name: string | null;
+  aura_points: number;
+}
+
+interface ReferralEntry {
+  id: string;
+  inviteeId: string;
+  inviteeUsername: string | null;
+  inviteeDisplayName: string;
+  status: "pending" | "activated" | "rejected";
+  joinedAt: string;
+  activatedAt: string | null;
+  inviterReward: number;
+  inviteeReward: number;
+  hasFirstClaim: boolean;
+}
+
 const WEEKLY_TITLE_LABELS: Record<string, string> = {
   weekly_aura_champion: "Чемп ауры",
   weekly_rise_rocket: "Ракета роста",
@@ -79,8 +106,24 @@ function asNumber(value: number | string | null | undefined): number {
 
 export default async function ProfileSecondaryPanels({
   userId,
+  auraPoints,
+  dailyStreak,
+  referredById,
+  profileUsername,
+  displayName,
+  profileShareLink,
+  inviteLink,
+  referrals,
 }: {
   userId: string;
+  auraPoints: number;
+  dailyStreak: number;
+  referredById: string | null;
+  profileUsername: string;
+  displayName: string;
+  profileShareLink: string;
+  inviteLink: string | null;
+  referrals: ReferralEntry[];
 }) {
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
@@ -94,6 +137,7 @@ export default async function ProfileSecondaryPanels({
     shareableMomentsResult,
     raceContextResult,
     weeklyTitlesResult,
+    presenceStateResult,
   ] = await Promise.all([
     supabase
       .from("boosts")
@@ -127,6 +171,7 @@ export default async function ProfileSecondaryPanels({
       .limit(6),
     supabase.rpc("get_profile_leaderboard_context", { p_profile_id: userId, p_top_target: 10 }).maybeSingle(),
     supabase.rpc("get_active_weekly_titles", { p_limit: 12 }),
+    supabase.from("leaderboard_presence_states").select("last_rank, updated_at").eq("profile_id", userId).maybeSingle(),
   ]);
 
   const spotlightRows = (spotlightResult.data as SpotlightRow[] | null) || [];
@@ -209,11 +254,117 @@ export default async function ProfileSecondaryPanels({
       title: WEEKLY_TITLE_LABELS[row.title_key] || row.title,
     }));
 
+  const presenceState = (presenceStateResult.data as PresenceStateRow | null) || null;
+  const trackedAt = presenceState?.updated_at ?? null;
+  const trackedSinceDate = trackedAt ?? null;
+  const [transactionsSinceTrackedResult, achievementsSinceTrackedResult, momentsSinceTrackedResult, pendingEventsResult] =
+    trackedSinceDate
+      ? await Promise.all([
+          supabase.from("transactions").select("amount").eq("user_id", userId).gt("created_at", trackedSinceDate),
+          supabase
+            .from("user_achievements")
+            .select("achievement_key", { count: "exact", head: true })
+            .eq("user_id", userId)
+            .gt("unlocked_at", trackedSinceDate),
+          supabase
+            .from("shareable_moments")
+            .select("id", { count: "exact", head: true })
+            .eq("profile_id", userId)
+            .gt("created_at", trackedSinceDate),
+          supabase
+            .from("notification_events")
+            .select("id", { count: "exact", head: true })
+            .eq("profile_id", userId)
+            .in("status", ["pending", "processing"]),
+        ])
+      : [{ data: [] as Array<{ amount: number }> }, { count: 0 }, { count: 0 }, { count: 0 }];
+  const auraDeltaSinceTracked = trackedSinceDate
+    ? (((transactionsSinceTrackedResult.data as Array<{ amount: number }> | null) || []) as Array<{ amount: number }>).reduce(
+        (sum, row) => sum + Number(row.amount || 0),
+        0,
+      )
+    : 0;
+  const newMomentsSinceTracked = trackedSinceDate ? Number(momentsSinceTrackedResult.count || 0) : 0;
+  const pendingEvents = trackedSinceDate ? Number(pendingEventsResult.count || 0) : 0;
+  const newAchievementsSinceTracked = trackedSinceDate ? Number(achievementsSinceTrackedResult.count || 0) : 0;
+
+  const activatedReferralsSinceTracked = trackedSinceDate
+    ? referrals.filter((entry) => entry.activatedAt && entry.activatedAt > trackedSinceDate).length
+    : 0;
+
+  const circleIds = Array.from(
+    new Set([userId, ...(referredById ? [referredById] : []), ...referrals.map((entry) => entry.inviteeId)]),
+  );
+  const circleProfilesResult = circleIds.length
+    ? await supabase.from("profiles").select("id, username, display_name, aura_points").in("id", circleIds)
+    : { data: [] as CircleProfileRow[] };
+  const circleProfiles = ((circleProfilesResult.data as CircleProfileRow[] | null) || [])
+    .map((row) => {
+      let relation: "you" | "invited" | "invited_you" = "invited";
+      let relationLabel = "твой человек";
+
+      if (row.id === userId) {
+        relation = "you";
+        relationLabel = "это ты";
+      } else if (referredById && row.id === referredById) {
+        relation = "invited_you";
+        relationLabel = "пригласил тебя";
+      } else {
+        const referral = referrals.find((entry) => entry.inviteeId === row.id);
+        relationLabel =
+          referral?.status === "activated"
+            ? "ты пригласил, loop уже закрылся"
+            : referral?.hasFirstClaim
+              ? "ты пригласил, ждём social proof"
+              : "ты пригласил, ждём первый claim";
+      }
+
+      return {
+        id: row.id,
+        username: row.username,
+        displayName: row.display_name || row.username,
+        auraPoints: Number(row.aura_points || 0),
+        relation,
+        relationLabel,
+      };
+    })
+    .sort((left, right) => right.auraPoints - left.auraPoints)
+    .slice(0, 6);
+
+  const activatedInvites = referrals.filter((entry) => entry.status === "activated").length;
+  const pendingInvites = referrals.filter((entry) => entry.status === "pending").length;
+
   return (
     <>
-      <ProfileRaceCard raceContext={raceContext} weeklyTitles={weeklyTitles} />
+      <ReturnPulseCard
+        trackedAt={trackedAt}
+        currentRank={raceContext?.rank ?? null}
+        previousRank={presenceState?.last_rank ?? null}
+        auraDelta={auraDeltaSinceTracked}
+        newAchievements={newAchievementsSinceTracked}
+        newMoments={newMomentsSinceTracked}
+        activatedReferrals={activatedReferralsSinceTracked}
+        pendingEvents={pendingEvents}
+      />
+      <MyCircleCard
+        circleProfiles={circleProfiles}
+        activatedInvites={activatedInvites}
+        pendingInvites={pendingInvites}
+      />
+      <ProfileRaceCard
+        raceContext={raceContext}
+        weeklyTitles={weeklyTitles}
+        auraPoints={auraPoints}
+        dailyStreak={dailyStreak}
+      />
       <ReengagementEventsCard events={(reengagementEventsResult.data as NotificationEventRow[] | null) || []} />
-      <ShareableMomentsCard moments={(shareableMomentsResult.data as ShareableMomentRow[] | null) || []} />
+      <ShareableMomentsCard
+        moments={(shareableMomentsResult.data as ShareableMomentRow[] | null) || []}
+        username={profileUsername}
+        displayName={displayName}
+        profileShareLink={profileShareLink}
+        inviteLink={inviteLink}
+      />
       <LeaderboardPreview
         auraLeaders={auraLeaders}
         growthLeaders={growthLeaders}

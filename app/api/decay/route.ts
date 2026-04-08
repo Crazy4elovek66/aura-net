@@ -1,5 +1,5 @@
+import { API_ERROR_MESSAGES, buildApiErrorResponse, buildApiSuccessResponse } from "@/lib/server/route-response";
 import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
 
 export async function POST() {
   const supabase = await createClient();
@@ -9,7 +9,9 @@ export async function POST() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return buildApiErrorResponse(401, API_ERROR_MESSAGES.unauthorized, {
+      code: "UNAUTHORIZED",
+    });
   }
 
   const { data, error } = await supabase.rpc("apply_daily_decay", {
@@ -17,9 +19,10 @@ export async function POST() {
   });
 
   if (error) {
-    return NextResponse.json({ error: "Decay failed" }, { status: 500 });
+    return buildApiErrorResponse(500, "Не удалось применить угасание.", {
+      code: "DECAY_FAILED",
+    });
   }
 
-  return NextResponse.json({ success: true, lost: Number(data || 0) });
+  return buildApiSuccessResponse({ lost: Number(data || 0) });
 }
-

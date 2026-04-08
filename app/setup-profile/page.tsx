@@ -206,6 +206,21 @@ export default function SetupProfilePage() {
             После этого ты получишь свою уникальную карточку <br /> и сможешь начать копить ауру
           </p>
           
+          <div className="w-full rounded-3xl border border-white/10 bg-black/35 p-5 text-left">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neon-green/85">Что дальше</p>
+            <div className="mt-3 space-y-2">
+              {[
+                "1. Получишь свою карточку и публичную ссылку.",
+                "2. Сразу увидишь следующий progression target: серия, tier и место в гонке.",
+                "3. Сможешь отправить карточку или инвайт без лишнего онбординга.",
+              ].map((step) => (
+                <p key={step} className="rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2 text-[11px] leading-relaxed text-white/68">
+                  {step}
+                </p>
+              ))}
+            </div>
+          </div>
+
           <button
             onClick={async () => {
               await supabase.auth.signOut();

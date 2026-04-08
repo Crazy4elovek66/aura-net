@@ -2,80 +2,48 @@ import {
   ANONYMOUS_VOTE_COST,
   ANONYMOUS_VOTE_DAILY_LIMIT,
   VOTE_DAILY_LIMIT,
-  getUtcDayWindow,
 } from "@/lib/economy";
-import { drainPendingNotificationQueue } from "@/lib/server/notification-delivery";
 import { createOpsEvent } from "@/lib/server/ops-events";
 import { getProfileModerationStates, isProfileLimited } from "@/lib/server/profile-moderation";
-import { consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
-import { buildRateLimitResponse } from "@/lib/server/route-response";
+import { consumePersistentRateLimit, consumeRateLimit, getRequestIp } from "@/lib/server/rate-limit";
+import {
+  API_ERROR_MESSAGES,
+  buildApiErrorResponse,
+  buildApiSuccessResponse,
+  buildRateLimitResponse,
+} from "@/lib/server/route-response";
+import { invalidateRuntimeCache } from "@/lib/server/runtime-cache";
+import { drainRuntimeReliabilityWork, scheduleInternalRuntimeDrain } from "@/lib/server/runtime-reliability";
+import { enqueueRuntimeJob } from "@/lib/server/runtime-jobs";
+import {
+  buildVoteSuccessPayload as buildVoteSuccessPayloadForResponse,
+} from "@/lib/server/vote-flow";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { after } from "next/server";
-import { NextResponse } from "next/server";
 
 const AI_COMMENTS = {
   up: [
-    "Этот вайб нельзя купить. Ты просто сигма, бро.",
-    "Аура зашкаливает. Главный герой в здании.",
-    "Это было мощно. Плюс респект в копилку.",
-    "Чистый люкс. Твой стиль это искусство.",
+    "Этот вайб не купить. Плюс аура заслужен.",
+    "Сильный ход. Плюс уважение в копилку.",
+    "Стиль считывается сразу. Хороший плюс.",
+    "Это было мощно. Аура пошла вверх.",
   ],
   down: [
-    "Ой... Похоже кто-то словил кринж.",
-    "Минус аура. Попробуй сменить имидж, НПС.",
-    "Вайб-чек провален. Сегодня не твой день.",
-    "Энергетика на нуле. Срочно нужна перезарядка.",
+    "Сегодня вайб не дотянул.",
+    "Минус аура. Пора перезарядиться.",
+    "Этот заход не сработал.",
+    "Кринж-чек не пройден. Нужно возвращение.",
   ],
-};
+} as const;
 
-async function rollbackAnonymousCharge(
-  admin: ReturnType<typeof createAdminClient>,
-  userId: string,
-  taxTransactionId: string | null,
-) {
-  await admin.rpc("increment_aura", { target_id: userId, amount: ANONYMOUS_VOTE_COST });
-
-  if (taxTransactionId) {
-    await admin.from("transactions").delete().eq("id", taxTransactionId);
-  }
-}
-
-async function rollbackVoteMutation(params: {
-  admin: ReturnType<typeof createAdminClient>;
-  voteId: string;
-  targetId: string;
-  auraChange: number;
-  isAnonymous: boolean;
-  voterId: string;
-  taxTransactionId: string | null;
-}) {
-  const { admin, voteId, targetId, auraChange, isAnonymous, voterId, taxTransactionId } = params;
-  const rollbackResults = await Promise.allSettled([
-    admin.from("votes").delete().eq("id", voteId),
-    admin.rpc("increment_aura", {
-      target_id: targetId,
-      amount: -auraChange,
-    }),
-    isAnonymous ? rollbackAnonymousCharge(admin, voterId, taxTransactionId) : Promise.resolve(),
-  ]);
-
-  const failedRollback = rollbackResults.find((result) => result.status === "rejected");
-  if (failedRollback?.status === "rejected") {
-    await createOpsEvent({
-      level: "critical",
-      scope: "vote",
-      eventType: "vote_rollback_failed",
-      profileId: targetId,
-      actorId: voterId,
-      message: failedRollback.reason instanceof Error ? failedRollback.reason.message : String(failedRollback.reason),
-      payload: {
-        voteId,
-        auraChange,
-        anonymous: isAnonymous,
-      },
-    });
-  }
+interface CastVoteRow {
+  vote_id?: string | null;
+  aura_change?: number | null;
+  regular_votes_used?: number | null;
+  anonymous_votes_used?: number | null;
+  voter_aura_left?: number | null;
+  target_aura?: number | null;
 }
 
 async function runVoteSideEffects(params: {
@@ -113,95 +81,291 @@ async function runVoteSideEffects(params: {
     .select("username, display_name")
     .eq("id", voterId)
     .maybeSingle();
+  let queuedFollowUp = false;
 
-  const sideEffects: Array<PromiseLike<unknown> | unknown> = [
-    admin.rpc("enqueue_notification_event", {
-      p_profile_id: targetId,
-      p_event_type: "new_vote",
-      p_payload: {
-        voteId,
-        voteType: type,
-        auraChange,
-        voterId,
-        voterUsername: voterProfile?.username || null,
-        voterDisplayName: voterProfile?.display_name || voterProfile?.username || null,
-        anonymous: isAnonymous,
-        createdAt: new Date().toISOString(),
-      },
-      p_dedupe_key: `new-vote:${targetId}:${notificationBucket}`,
-      p_channel: "telegram",
-    }),
-    admin.rpc("sync_leaderboard_presence_event", {
-      p_profile_id: targetId,
-    }),
-    admin.rpc("refresh_weekly_titles"),
-    admin.rpc("activate_referral_if_eligible", {
-      p_invitee_id: voterId,
-      p_source: "vote_cast",
-      p_context: { source: "vote", voteId },
-    }),
-    admin.rpc("activate_referral_if_eligible", {
-      p_invitee_id: targetId,
-      p_source: "vote_received",
-      p_context: { source: "vote", voteId },
-    }),
-  ];
-
-  if (type === "up") {
-    sideEffects.push(
-      (async () => {
-        const { count, error: upvotesCountError } = await admin
-          .from("votes")
-          .select("id", { count: "exact", head: true })
-          .eq("target_id", targetId)
-          .eq("vote_type", "up");
-
-        if (upvotesCountError) {
-          console.error("[Vote API] Failed to count upvotes for achievement", upvotesCountError.message);
-          return;
-        }
-
-        if ((count || 0) < 10) {
-          return;
-        }
-
-        const { error: achievementError } = await admin.rpc("grant_achievement", {
-          p_profile_id: targetId,
-          p_achievement_key: "upvotes_received_10",
-          p_context: {
-            source: "vote",
-            upvotesCount: Number(count || 0),
-            voteId,
-          },
-        });
-
-        if (achievementError) {
-          console.error("[Vote API] Failed to grant achievement", achievementError.message);
-        }
-      })(),
-    );
+  async function queueJob(params: {
+    eventType: string;
+    message: string;
+    jobType:
+      | "enqueue_notification_event"
+      | "sync_leaderboard_presence"
+      | "refresh_weekly_titles"
+      | "emit_weekly_title_moments"
+      | "activate_referral";
+    dedupeKey: string;
+    payload: Record<string, unknown>;
+    profileId?: string;
+    actorId?: string;
+  }) {
+    queuedFollowUp = true;
+    await createOpsEvent({
+      level: "warn",
+      scope: "vote",
+      eventType: params.eventType,
+      profileId: params.profileId || targetId,
+      actorId: params.actorId || voterId,
+      message: params.message,
+      payload: params.payload,
+    });
+    await enqueueRuntimeJob({
+      jobType: params.jobType,
+      dedupeKey: params.dedupeKey,
+      payload: params.payload,
+    });
   }
 
-  const results = await Promise.allSettled(sideEffects);
+  const notificationPayload = {
+    voteId,
+    voteType: type,
+    auraChange,
+    voterId,
+    voterUsername: voterProfile?.username || null,
+    voterDisplayName: voterProfile?.display_name || voterProfile?.username || null,
+    anonymous: isAnonymous,
+    createdAt: new Date().toISOString(),
+  };
 
-  for (const result of results) {
-    if (result.status === "rejected") {
-      console.error("[Vote API] Side effect failed", result.reason);
-      continue;
-    }
+  const notificationResult = await admin.rpc("enqueue_notification_event", {
+    p_profile_id: targetId,
+    p_event_type: "new_vote",
+    p_payload: notificationPayload,
+    p_dedupe_key: `new-vote:${targetId}:${notificationBucket}`,
+    p_channel: "telegram",
+  });
 
-    const value = result.value as { error?: { message?: string } } | undefined;
-    if (value?.error?.message) {
-      console.error("[Vote API] Side effect failed", value.error.message);
+  if (notificationResult.error) {
+    console.error("[Vote API] Failed to enqueue vote notification", notificationResult.error.message);
+    await queueJob({
+      eventType: "vote_notification_enqueue_failed",
+      message: notificationResult.error.message,
+      jobType: "enqueue_notification_event",
+      dedupeKey: `vote:notification:${targetId}:${notificationBucket}`,
+      payload: {
+        profileId: targetId,
+        eventType: "new_vote",
+        data: notificationPayload,
+        dedupeKey: `new-vote:${targetId}:${notificationBucket}`,
+        channel: "telegram",
+      },
+    });
+  }
+
+  const leaderboardResult = await admin.rpc("sync_leaderboard_presence_event", {
+    p_profile_id: targetId,
+  });
+  if (leaderboardResult.error) {
+    console.error("[Vote API] Failed to sync leaderboard presence", leaderboardResult.error.message);
+    await queueJob({
+      eventType: "vote_leaderboard_sync_failed",
+      message: leaderboardResult.error.message,
+      jobType: "sync_leaderboard_presence",
+      dedupeKey: `vote:leaderboard:${targetId}`,
+      payload: {
+        profileId: targetId,
+      },
+    });
+  }
+
+  const refreshWeeklyTitlesResult = await admin.rpc("refresh_weekly_titles");
+  if (refreshWeeklyTitlesResult.error) {
+    console.error("[Vote API] Failed to refresh weekly titles", refreshWeeklyTitlesResult.error.message);
+    await queueJob({
+      eventType: "vote_weekly_titles_refresh_failed",
+      message: refreshWeeklyTitlesResult.error.message,
+      jobType: "refresh_weekly_titles",
+      dedupeKey: `vote:weekly-refresh:${new Date().toISOString().slice(0, 13)}`,
+      payload: {
+        source: "vote",
+        voteId,
+      },
+    });
+  }
+
+  const voterReferralResult = await admin.rpc("activate_referral_if_eligible", {
+    p_invitee_id: voterId,
+    p_source: "vote_cast",
+    p_context: { source: "vote", voteId },
+  });
+  if (voterReferralResult.error) {
+    console.error("[Vote API] Failed to activate voter referral", voterReferralResult.error.message);
+    await queueJob({
+      eventType: "vote_referral_activation_failed",
+      message: voterReferralResult.error.message,
+      jobType: "activate_referral",
+      dedupeKey: `vote:referral:voter:${voterId}:${voteId}`,
+      payload: {
+        inviteeId: voterId,
+        source: "vote_cast",
+        context: { source: "vote", voteId },
+      },
+      profileId: voterId,
+    });
+  }
+
+  const targetReferralResult = await admin.rpc("activate_referral_if_eligible", {
+    p_invitee_id: targetId,
+    p_source: "vote_received",
+    p_context: { source: "vote", voteId },
+  });
+  if (targetReferralResult.error) {
+    console.error("[Vote API] Failed to activate target referral", targetReferralResult.error.message);
+    await queueJob({
+      eventType: "vote_target_referral_activation_failed",
+      message: targetReferralResult.error.message,
+      jobType: "activate_referral",
+      dedupeKey: `vote:referral:target:${targetId}:${voteId}`,
+      payload: {
+        inviteeId: targetId,
+        source: "vote_received",
+        context: { source: "vote", voteId },
+      },
+      profileId: targetId,
+    });
+  }
+
+  if (type === "up") {
+    const { count, error: upvotesCountError } = await admin
+      .from("votes")
+      .select("id", { count: "exact", head: true })
+      .eq("target_id", targetId)
+      .eq("vote_type", "up");
+
+    if (upvotesCountError) {
+      console.error("[Vote API] Failed to count upvotes for achievement", upvotesCountError.message);
+    } else if ((count || 0) >= 10) {
+      const { error: achievementError } = await admin.rpc("grant_achievement", {
+        p_profile_id: targetId,
+        p_achievement_key: "upvotes_received_10",
+        p_context: {
+          source: "vote",
+          upvotesCount: Number(count || 0),
+          voteId,
+        },
+      });
+
+      if (achievementError) {
+        console.error("[Vote API] Failed to grant achievement", achievementError.message);
+        await createOpsEvent({
+          level: "warn",
+          scope: "vote",
+          eventType: "vote_achievement_grant_failed",
+          profileId: targetId,
+          actorId: voterId,
+          message: achievementError.message,
+          payload: {
+            voteId,
+            upvotesCount: Number(count || 0),
+          },
+        });
+      }
     }
   }
 
   const weeklyMomentResult = await admin.rpc("emit_active_weekly_title_moments");
   if (weeklyMomentResult.error) {
     console.error("[Vote API] Failed to emit weekly title moments", weeklyMomentResult.error.message);
+    await queueJob({
+      eventType: "vote_weekly_moments_failed",
+      message: weeklyMomentResult.error.message,
+      jobType: "emit_weekly_title_moments",
+      dedupeKey: `vote:weekly-moments:${targetId}:${new Date().toISOString().slice(0, 10)}`,
+      payload: {
+        profileId: targetId,
+        source: "vote",
+        voteId,
+      },
+    });
   }
 
-  await drainPendingNotificationQueue();
+  await drainRuntimeReliabilityWork({
+    source: "vote-after",
+  });
+
+  if (queuedFollowUp) {
+    await scheduleInternalRuntimeDrain("vote-follow-up");
+  }
+}
+
+function mapVoteRpcError(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("already voted")) {
+    return {
+      status: 400,
+      code: "ALREADY_VOTED",
+      error: "Ты уже голосовал за этот профиль.",
+    };
+  }
+
+  if (normalized.includes("self vote forbidden")) {
+    return {
+      status: 400,
+      code: "SELF_VOTE_FORBIDDEN",
+      error: "Голосовать за себя нельзя.",
+    };
+  }
+
+  if (normalized.includes("anonymous vote daily limit reached")) {
+    return {
+      status: 429,
+      code: "ANONYMOUS_DAILY_LIMIT_REACHED",
+      error: `Лимит анонимных голосов на сегодня исчерпан (${ANONYMOUS_VOTE_DAILY_LIMIT}/${ANONYMOUS_VOTE_DAILY_LIMIT}).`,
+    };
+  }
+
+  if (normalized.includes("regular vote daily limit reached")) {
+    return {
+      status: 429,
+      code: "VOTE_DAILY_LIMIT_REACHED",
+      error: `Лимит обычных голосов на сегодня исчерпан (${VOTE_DAILY_LIMIT}/${VOTE_DAILY_LIMIT}).`,
+    };
+  }
+
+  if (normalized.includes("insufficient aura")) {
+    return {
+      status: 403,
+      code: "INSUFFICIENT_AURA",
+      error: `Недостаточно ауры для анонимного голоса. Нужно ${ANONYMOUS_VOTE_COST}.`,
+    };
+  }
+
+  if (normalized.includes("invalid vote type")) {
+    return {
+      status: 400,
+      code: "INVALID_VOTE_PAYLOAD",
+      error: "Некорректные данные голоса.",
+    };
+  }
+
+  if (normalized.includes("not allowed")) {
+    return {
+      status: 403,
+      code: "FORBIDDEN",
+      error: API_ERROR_MESSAGES.forbidden,
+    };
+  }
+
+  if (normalized.includes("profile not found")) {
+    return {
+      status: 404,
+      code: "PROFILE_NOT_FOUND",
+      error: "Профиль не найден.",
+    };
+  }
+
+  if (normalized.includes("function") && normalized.includes("does not exist")) {
+    return {
+      status: 501,
+      code: "FUNCTION_MISSING",
+      error: "Функция голосования не найдена. Примени актуальные миграции.",
+    };
+  }
+
+  return {
+    status: 500,
+    code: "VOTE_CREATE_FAILED",
+    error: "Не удалось создать голос.",
+  };
 }
 
 export async function POST(request: Request) {
@@ -216,28 +380,24 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  let admin: ReturnType<typeof createAdminClient>;
-
-  try {
-    admin = createAdminClient();
-  } catch {
-    return NextResponse.json({ error: "Server config error" }, { status: 500 });
-  }
-
   let payload: { targetId?: unknown; type?: unknown; isAnonymous?: unknown };
 
   try {
     payload = await request.json();
   } catch {
-    return NextResponse.json({ error: "Некорректный JSON" }, { status: 400 });
+    return buildApiErrorResponse(400, API_ERROR_MESSAGES.invalidJson, {
+      code: "INVALID_JSON",
+    });
   }
 
-  const targetId = typeof payload.targetId === "string" ? payload.targetId : "";
+  const targetId = typeof payload.targetId === "string" ? payload.targetId.trim() : "";
   const type = payload.type === "up" || payload.type === "down" ? payload.type : null;
   const isAnonymous = Boolean(payload.isAnonymous);
 
   if (!targetId || !type) {
-    return NextResponse.json({ error: "Некорректные данные голоса" }, { status: 400 });
+    return buildApiErrorResponse(400, "Некорректные данные голоса.", {
+      code: "INVALID_VOTE_PAYLOAD",
+    });
   }
 
   const {
@@ -245,7 +405,9 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Нужно войти, чтобы голосовать" }, { status: 401 });
+    return buildApiErrorResponse(401, "Нужно войти, чтобы голосовать.", {
+      code: "UNAUTHORIZED",
+    });
   }
 
   const moderationMap = await getProfileModerationStates([user.id, targetId]);
@@ -267,14 +429,18 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ error: "РџСЂРѕС„РёР»СЊ РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РµРЅ" }, { status: 403 });
+    return buildApiErrorResponse(403, API_ERROR_MESSAGES.profileLimited, {
+      code: "PROFILE_LIMITED",
+    });
   }
 
   if (isProfileLimited(targetModeration)) {
-    return NextResponse.json({ error: "РџСЂРѕС„РёР»СЊ РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРµРЅ РґР»СЏ РіРѕР»РѕСЃРѕРІР°РЅРёСЏ" }, { status: 403 });
+    return buildApiErrorResponse(403, API_ERROR_MESSAGES.profileUnavailableForVoting, {
+      code: "TARGET_PROFILE_LIMITED",
+    });
   }
 
-  const userLimit = consumeRateLimit({
+  const userLimit = await consumePersistentRateLimit({
     key: `vote:user:${user.id}`,
     limit: 6,
     windowMs: 10_000,
@@ -284,301 +450,65 @@ export async function POST(request: Request) {
     return buildRateLimitResponse("Слишком много попыток голосования. Подожди несколько секунд.", userLimit);
   }
 
-  if (user.id === targetId) {
-    return NextResponse.json({ error: "Голосовать за себя нельзя" }, { status: 400 });
-  }
-
-  const { start, end } = getUtcDayWindow();
-  const dayStartIso = start.toISOString();
-  const dayEndIso = end.toISOString();
-
-  const [existingVoteResult, regularVotesResult, anonymousVotesResult] = await Promise.all([
-    supabase.from("votes").select("id").eq("voter_id", user.id).eq("target_id", targetId).maybeSingle(),
-    supabase
-      .from("votes")
-      .select("id", { count: "exact", head: true })
-      .eq("voter_id", user.id)
-      .eq("is_anonymous", false)
-      .gte("created_at", dayStartIso)
-      .lt("created_at", dayEndIso),
-    supabase
-      .from("votes")
-      .select("id", { count: "exact", head: true })
-      .eq("voter_id", user.id)
-      .eq("is_anonymous", true)
-      .gte("created_at", dayStartIso)
-      .lt("created_at", dayEndIso),
-  ]);
-
-  if (existingVoteResult.error) {
-    await createOpsEvent({
-      level: "error",
-      scope: "vote",
-      eventType: "existing_vote_lookup_failed",
-      profileId: targetId,
-      actorId: user.id,
-      requestPath: new URL(request.url).pathname,
-      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
-      message: existingVoteResult.error.message,
-    });
-    return NextResponse.json({ error: "Не удалось проверить предыдущий голос" }, { status: 500 });
-  }
-
-  if (existingVoteResult.data) {
-    return NextResponse.json({ error: "Ты уже голосовал за этот профиль" }, { status: 400 });
-  }
-
-  if (regularVotesResult.error || anonymousVotesResult.error) {
-    await createOpsEvent({
-      level: "error",
-      scope: "vote",
-      eventType: "daily_limit_lookup_failed",
-      profileId: targetId,
-      actorId: user.id,
-      requestPath: new URL(request.url).pathname,
-      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
-      message: regularVotesResult.error?.message || anonymousVotesResult.error?.message || "Failed to check vote limits",
-    });
-    return NextResponse.json({ error: "Не удалось проверить дневные лимиты" }, { status: 500 });
-  }
-
-  const regularVotesToday = Number(regularVotesResult.count || 0);
-  const anonymousVotesToday = Number(anonymousVotesResult.count || 0);
-
-  if (isAnonymous && anonymousVotesToday >= ANONYMOUS_VOTE_DAILY_LIMIT) {
-    return NextResponse.json(
-      {
-        error: `Лимит анонимных голосов на сегодня исчерпан (${ANONYMOUS_VOTE_DAILY_LIMIT}/${ANONYMOUS_VOTE_DAILY_LIMIT})`,
-      },
-      { status: 429 },
-    );
-  }
-
-  if (!isAnonymous && regularVotesToday >= VOTE_DAILY_LIMIT) {
-    return NextResponse.json(
-      {
-        error: `Лимит обычных голосов на сегодня исчерпан (${VOTE_DAILY_LIMIT}/${VOTE_DAILY_LIMIT})`,
-      },
-      { status: 429 },
-    );
-  }
-
-  let taxTransactionId: string | null = null;
-
-  if (isAnonymous) {
-    const { data: voterProfile, error: voterProfileError } = await supabase
-      .from("profiles")
-      .select("aura_points")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (voterProfileError) {
-      return NextResponse.json({ error: "Не удалось проверить баланс" }, { status: 500 });
-    }
-
-    if (!voterProfile) {
-      return NextResponse.json(
-        { error: "Для анонимного голоса нужен полноценный профиль с аурой" },
-        { status: 403 },
-      );
-    }
-
-    if ((voterProfile.aura_points || 0) < ANONYMOUS_VOTE_COST) {
-      return NextResponse.json(
-        { error: `Недостаточно ауры для анонимного голоса (нужно ${ANONYMOUS_VOTE_COST})` },
-        { status: 403 },
-      );
-    }
-
-    const { error: taxError } = await supabase.rpc("increment_aura", {
-      target_id: user.id,
-      amount: -ANONYMOUS_VOTE_COST,
-    });
-
-    if (taxError) {
-      const notEnoughAura = taxError.message.toLowerCase().includes("insufficient aura");
-      return NextResponse.json(
-        { error: notEnoughAura ? "Недостаточно ауры для анонимного голоса" : "Не удалось списать стоимость анонимности" },
-        { status: notEnoughAura ? 403 : 500 },
-      );
-    }
-
-    const { data: taxTransaction, error: taxTransactionError } = await supabase
-      .from("transactions")
-      .insert({
-        user_id: user.id,
-        amount: -ANONYMOUS_VOTE_COST,
-        type: "tax",
-        description: "Налог за анонимное голосование",
-        metadata: { source: "vote", anonymous: true },
-      })
-      .select("id")
-      .single();
-
-    if (taxTransactionError) {
-      await rollbackAnonymousCharge(admin, user.id, null);
-      return NextResponse.json({ error: "Не удалось зафиксировать налог в истории" }, { status: 500 });
-    }
-
-    taxTransactionId = taxTransaction.id;
-  }
-
-  const { data: createdVote, error: voteError } = await supabase
-    .from("votes")
-    .insert({
-      voter_id: user.id,
-      target_id: targetId,
-      vote_type: type,
-      is_anonymous: isAnonymous,
+  const { data, error } = await supabase
+    .rpc("cast_profile_vote", {
+      p_voter_id: user.id,
+      p_target_id: targetId,
+      p_vote_type: type,
+      p_is_anonymous: isAnonymous,
+      p_anonymous_cost: ANONYMOUS_VOTE_COST,
+      p_regular_daily_limit: VOTE_DAILY_LIMIT,
+      p_anonymous_daily_limit: ANONYMOUS_VOTE_DAILY_LIMIT,
     })
-    .select("id")
     .single();
 
-  if (voteError) {
+  if (error) {
     await createOpsEvent({
       level: "error",
       scope: "vote",
-      eventType: "vote_insert_failed",
+      eventType: "vote_cast_failed",
       profileId: targetId,
       actorId: user.id,
       requestPath: new URL(request.url).pathname,
       requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
-      message: voteError.message,
+      message: error.message,
       payload: {
-        code: voteError.code,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
         anonymous: isAnonymous,
       },
     });
-    if (isAnonymous) {
-      await rollbackAnonymousCharge(admin, user.id, taxTransactionId);
-    }
 
-    if (voteError.code === "23505") {
-      return NextResponse.json({ error: "Ты уже голосовал за этот профиль" }, { status: 400 });
-    }
-
-    return NextResponse.json({ error: voteError.message }, { status: 500 });
+    const mapped = mapVoteRpcError(error.message || "");
+    return buildApiErrorResponse(mapped.status, mapped.error, {
+      code: mapped.code,
+    });
   }
 
-  if (!createdVote) {
-    if (isAnonymous) {
-      await rollbackAnonymousCharge(admin, user.id, taxTransactionId);
-    }
+  const row = (data || {}) as CastVoteRow;
+  const voteId = row.vote_id || "";
+  const auraChange = Number(row.aura_change || 0);
 
-    return NextResponse.json({ error: "Не удалось создать голос" }, { status: 500 });
-  }
+  invalidateRuntimeCache([
+    "discover:v2",
+    "leaderboard-full:v2",
+    "leaderboard-preview:v2",
+    "landing-stats:v2",
+  ]);
 
-  const auraChange = type === "up" ? 10 : -10;
-  const { data: targetProfileBefore, error: targetProfileBeforeError } = await admin
-    .from("profiles")
-    .select("id")
-    .eq("id", targetId)
-    .single();
-
-  if (targetProfileBeforeError || !targetProfileBefore) {
-    await admin.from("votes").delete().eq("id", createdVote.id);
-
-    if (isAnonymous) {
-      await rollbackAnonymousCharge(admin, user.id, taxTransactionId);
-    }
-
-    return NextResponse.json({ error: "Не удалось прочитать баланс цели" }, { status: 500 });
-  }
-
-  const { error: auraUpdateError } = await admin.rpc("increment_aura", {
-    target_id: targetId,
-    amount: auraChange,
-  });
-
-  if (auraUpdateError) {
-    await createOpsEvent({
-      level: "error",
-      scope: "vote",
-      eventType: "target_aura_update_failed",
-      profileId: targetId,
-      actorId: user.id,
-      requestPath: new URL(request.url).pathname,
-      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
-      message: auraUpdateError.message,
-      payload: {
-        voteId: createdVote.id,
+  if (voteId) {
+    after(async () => {
+      await runVoteSideEffects({
+        targetId,
+        voterId: user.id,
+        voteId,
+        type,
+        isAnonymous,
         auraChange,
-      },
+      });
     });
-    await admin.from("votes").delete().eq("id", createdVote.id);
-
-    if (isAnonymous) {
-      await rollbackAnonymousCharge(admin, user.id, taxTransactionId);
-    }
-
-    return NextResponse.json({ error: "Не удалось обновить ауру цели" }, { status: 500 });
   }
 
-  const transactionType: "vote_up" | "vote_down" = type === "up" ? "vote_up" : "vote_down";
-  const { error: transactionError } = await admin.from("transactions").insert({
-    user_id: targetId,
-    amount: auraChange,
-    type: transactionType,
-    description: type === "up" ? "Получен плюс-аура голос" : "Получен минус-аура голос",
-    metadata: {
-      source: "vote",
-      voteId: createdVote.id,
-      voterId: user.id,
-      anonymous: isAnonymous,
-    },
-  });
-
-  if (transactionError) {
-    console.error("[Vote API] Failed to write target transaction", transactionError.message);
-    await createOpsEvent({
-      level: "error",
-      scope: "vote",
-      eventType: "vote_transaction_write_failed",
-      profileId: targetId,
-      actorId: user.id,
-      requestPath: new URL(request.url).pathname,
-      requestId: request.headers.get("x-request-id") || request.headers.get("x-vercel-id"),
-      message: transactionError.message,
-      payload: {
-        voteId: createdVote.id,
-      },
-    });
-    await rollbackVoteMutation({
-      admin,
-      voteId: createdVote.id,
-      targetId,
-      auraChange,
-      isAnonymous,
-      voterId: user.id,
-      taxTransactionId,
-    });
-
-    return NextResponse.json({ error: "Не удалось зафиксировать изменение ауры" }, { status: 500 });
-  }
-
-  after(async () => {
-    await runVoteSideEffects({
-      targetId,
-      voterId: user.id,
-      voteId: createdVote.id,
-      type,
-      isAnonymous,
-      auraChange,
-    });
-  });
-
-  const comments = type === "up" ? AI_COMMENTS.up : AI_COMMENTS.down;
-  const aiComment = comments[Math.floor(Math.random() * comments.length)];
-
-  return NextResponse.json({
-    success: true,
-    comment: aiComment,
-    newAuraChange: auraChange,
-    limits: {
-      regularUsed: regularVotesToday + Number(!isAnonymous),
-      regularLimit: VOTE_DAILY_LIMIT,
-      anonymousUsed: anonymousVotesToday + Number(isAnonymous),
-      anonymousLimit: ANONYMOUS_VOTE_DAILY_LIMIT,
-    },
-  });
+  return buildApiSuccessResponse(buildVoteSuccessPayloadForResponse(type, row, AI_COMMENTS));
 }

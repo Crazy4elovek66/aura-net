@@ -1,6 +1,7 @@
 import { buildCacheControl, getOrSetRuntimeCache } from "@/lib/server/runtime-cache";
 import { createOpsEvent } from "@/lib/server/ops-events";
 import { getProfileModerationStates, isLeaderboardVisible } from "@/lib/server/profile-moderation";
+import { buildApiErrorResponse } from "@/lib/server/route-response";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
@@ -71,6 +72,11 @@ interface ProfileLeaderboardContextRow {
   below_aura_points: number | null;
 }
 
+interface PresenceStateRow {
+  last_rank: number | null;
+  updated_at: string;
+}
+
 const FULL_CACHE_TTL_MS = 15_000;
 const FULL_SECTION_SIZE = 20;
 const FULL_FETCH_SIZE = 40;
@@ -78,6 +84,11 @@ const FULL_SPOTLIGHT_FETCH_SIZE = 30;
 const FULL_WEEKLY_TITLES_SIZE = 12;
 const FULL_AROUND_SIZE = 5;
 const FULL_AROUND_FETCH_SIZE = 9;
+const TIER_TARGETS = [
+  { threshold: 501, label: "Герой" },
+  { threshold: 2001, label: "Тот самый" },
+  { threshold: 5001, label: "Сигма" },
+];
 
 function asNumber(value: number | string | null | undefined): number {
   if (typeof value === "number") {
@@ -86,6 +97,10 @@ function asNumber(value: number | string | null | undefined): number {
 
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getNextTier(auraPoints: number) {
+  return TIER_TARGETS.find((tier) => auraPoints < tier.threshold) ?? null;
 }
 
 async function loadPublicLeaderboardData() {
@@ -220,6 +235,41 @@ async function loadPublicLeaderboardData() {
           },
         })),
     },
+    live: {
+      cutlineTop10: ((allTimeResult.data as AuraLeaderboardRow[] | null) || [])
+        .filter((row) => isLeaderboardVisible(moderationMap.get(row.profile_id)))
+        .slice(7, 12)
+        .map((row, index) => ({
+          rank: index + 8,
+          id: row.profile_id,
+          username: row.username,
+          displayName: row.display_name,
+          auraPoints: asNumber(row.aura_points),
+        })),
+      nearTier: ((allTimeResult.data as AuraLeaderboardRow[] | null) || [])
+        .filter((row) => isLeaderboardVisible(moderationMap.get(row.profile_id)))
+        .map((row, index) => {
+          const auraPoints = asNumber(row.aura_points);
+          const tier = getNextTier(auraPoints);
+
+          if (!tier) {
+            return null;
+          }
+
+          return {
+            rank: index + 1,
+            id: row.profile_id,
+            username: row.username,
+            displayName: row.display_name,
+            auraPoints,
+            tierLabel: tier.label,
+            pointsToTier: tier.threshold - auraPoints,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null)
+        .sort((left, right) => left.pointsToTier - right.pointsToTier)
+        .slice(0, 6),
+    },
   };
 }
 
@@ -242,12 +292,21 @@ export async function GET() {
       above: { id: string; username: string; displayName: string; auraPoints: number } | null;
       below: { id: string; username: string; displayName: string; auraPoints: number } | null;
       aroundYou: Array<{ rank: number; id: string; username: string; displayName: string; auraPoints: number }>;
+      returnPulse: {
+        trackedAt: string | null;
+        previousRank: number | null;
+        auraDelta: number;
+        newAchievements: number;
+        newMoments: number;
+        pendingEvents: number;
+      } | null;
     } | null = null;
 
     if (user) {
-      const { data: contextData, error: contextError } = await supabase
-        .rpc("get_profile_leaderboard_context", { p_profile_id: user.id, p_top_target: 10 })
-        .maybeSingle();
+      const [{ data: contextData, error: contextError }, { data: presenceState }] = await Promise.all([
+        supabase.rpc("get_profile_leaderboard_context", { p_profile_id: user.id, p_top_target: 10 }).maybeSingle(),
+        supabase.from("leaderboard_presence_states").select("last_rank, updated_at").eq("profile_id", user.id).maybeSingle(),
+      ]);
 
       if (contextError) {
         console.error("[Leaderboard Full API] Failed to load personal context", contextError.message);
@@ -280,6 +339,34 @@ export async function GET() {
         const moderationMap = await getProfileModerationStates(contextRelatedIds);
         const visibleAbove = context.above_profile_id && isLeaderboardVisible(moderationMap.get(context.above_profile_id));
         const visibleBelow = context.below_profile_id && isLeaderboardVisible(moderationMap.get(context.below_profile_id));
+        const trackedState = (presenceState as PresenceStateRow | null) || null;
+        const trackedAt = trackedState?.updated_at ?? null;
+        const trackedSinceDate = trackedAt ?? null;
+        const [transactionsSinceTracked, achievementsSinceTracked, momentsSinceTracked, pendingEventsResult] = trackedSinceDate
+          ? await Promise.all([
+              supabase.from("transactions").select("amount").eq("user_id", user.id).gt("created_at", trackedSinceDate),
+              supabase
+                .from("user_achievements")
+                .select("achievement_key", { count: "exact", head: true })
+                .eq("user_id", user.id)
+                .gt("unlocked_at", trackedSinceDate),
+              supabase
+                .from("shareable_moments")
+                .select("id", { count: "exact", head: true })
+                .eq("profile_id", user.id)
+                .gt("created_at", trackedSinceDate),
+              supabase
+                .from("notification_events")
+                .select("id", { count: "exact", head: true })
+                .eq("profile_id", user.id)
+                .in("status", ["pending", "processing"]),
+            ])
+          : [{ data: [] as Array<{ amount: number }> }, { count: 0 }, { count: 0 }, { count: 0 }];
+        const auraDelta = trackedSinceDate
+          ? (((transactionsSinceTracked.data as Array<{ amount: number }> | null) || []) as Array<{
+              amount: number;
+            }>).reduce((sum, row) => sum + asNumber(row.amount), 0)
+          : 0;
         personalContext = {
           profileId: context.profile_id,
           username: context.username,
@@ -314,6 +401,16 @@ export async function GET() {
               auraPoints: asNumber(row.aura_points),
             }))
             .slice(0, FULL_AROUND_SIZE),
+          returnPulse: trackedSinceDate
+            ? {
+                trackedAt,
+                previousRank: trackedState?.last_rank ?? null,
+                auraDelta,
+                newAchievements: Number(achievementsSinceTracked.count || 0),
+                newMoments: Number(momentsSinceTracked.count || 0),
+                pendingEvents: Number(pendingEventsResult.count || 0),
+              }
+            : null,
         };
       }
     }
@@ -338,9 +435,13 @@ export async function GET() {
       message: error instanceof Error ? error.message : "Unknown leaderboard full error",
     });
     if (error instanceof Error && error.message === "SERVER_CONFIG") {
-      return NextResponse.json({ error: "Ошибка конфигурации сервера" }, { status: 500 });
+      return buildApiErrorResponse(500, "Ошибка конфигурации сервера.", {
+        code: "SERVER_CONFIG",
+      });
     }
 
-    return NextResponse.json({ error: "Не удалось загрузить полную гонку" }, { status: 500 });
+    return buildApiErrorResponse(500, "Не удалось загрузить полную гонку.", {
+      code: "LEADERBOARD_FULL_FAILED",
+    });
   }
 }

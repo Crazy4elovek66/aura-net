@@ -1,6 +1,7 @@
 import { buildCacheControl, getOrSetRuntimeCache } from "@/lib/server/runtime-cache";
 import { createOpsEvent } from "@/lib/server/ops-events";
 import { getProfileModerationStates, isLeaderboardVisible } from "@/lib/server/profile-moderation";
+import { buildApiErrorResponse } from "@/lib/server/route-response";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
@@ -144,9 +145,13 @@ export async function GET() {
       message: error instanceof Error ? error.message : "Unknown leaderboard preview error",
     });
     if (error instanceof Error && error.message === "SERVER_CONFIG") {
-      return NextResponse.json({ error: "Ошибка конфигурации сервера" }, { status: 500 });
+      return buildApiErrorResponse(500, "Ошибка конфигурации сервера.", {
+        code: "SERVER_CONFIG",
+      });
     }
 
-    return NextResponse.json({ error: "Не удалось загрузить лидерборд" }, { status: 500 });
+    return buildApiErrorResponse(500, "Не удалось загрузить лидерборд.", {
+      code: "LEADERBOARD_PREVIEW_FAILED",
+    });
   }
 }

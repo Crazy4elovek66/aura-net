@@ -15,4 +15,3 @@ set
     else description
   end
 where key in ('weekly_aura_champion', 'weekly_rise_rocket', 'weekly_hype_pulse');
-

@@ -13,6 +13,7 @@ interface DiscoverBase {
 
 interface AroundProfile extends DiscoverBase {
   rank: number;
+  auraGap: number | null;
 }
 
 interface HypeProfile extends DiscoverBase {
@@ -31,12 +32,24 @@ interface NewProfile extends DiscoverBase {
   createdAt: string;
 }
 
+interface CircleProfile extends DiscoverBase {
+  relation: "you" | "invited" | "invited_you";
+  relationLabel: string;
+}
+
+interface NearTierProfile extends DiscoverBase {
+  tierLabel: string;
+  pointsToTier: number;
+}
+
 interface DiscoverPayload {
   generatedAt: string;
   sections: {
     aroundYou: AroundProfile[];
+    myCircle: CircleProfile[];
     hypeProfiles: HypeProfile[];
     growth24h: GrowthProfile[];
+    nearTier: NearTierProfile[];
     newProfiles: NewProfile[];
   };
 }
@@ -99,7 +112,7 @@ export default function DiscoverHub() {
       <InlineStateCard
         eyebrow="Разведка"
         title="Загружаем витрины"
-        description="Собираем публичные профили, рост и свежие входы."
+        description="Собираем ближайших соперников, личный круг и живые срезы по росту."
       />
     );
   }
@@ -117,7 +130,7 @@ export default function DiscoverHub() {
     );
   }
 
-  const { aroundYou, hypeProfiles, growth24h, newProfiles } = payload.sections;
+  const { aroundYou, myCircle, hypeProfiles, growth24h, nearTier, newProfiles } = payload.sections;
 
   const renderProfileRow = (
     profile: DiscoverBase,
@@ -140,20 +153,64 @@ export default function DiscoverHub() {
 
   return (
     <div className="w-full space-y-5">
+      {myCircle.length > 0 ? (
+        <section className="w-full rounded-3xl border border-neon-green/25 bg-neon-green/[0.07] backdrop-blur-md p-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Мой круг</p>
+          <p className="mt-2 text-[11px] leading-relaxed text-white/55">
+            Здесь не весь мир, а люди, у которых уже есть реальная связь с твоей карточкой.
+          </p>
+          <div className="mt-3 space-y-2">
+            {myCircle.map((profile) =>
+              renderProfileRow(
+                profile,
+                profile.relationLabel,
+                profile.relation === "you" ? "text-neon-green" : "text-white/90",
+              ),
+            )}
+          </div>
+        </section>
+      ) : null}
+
       {aroundYou.length > 0 ? (
         <section className="w-full rounded-3xl border border-neon-purple/30 bg-neon-purple/10 backdrop-blur-md p-5">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Кто рядом с тобой</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Ближайшие соперники</p>
           <div className="mt-3 space-y-2">
-            {aroundYou.map((profile) => renderProfileRow(profile, `Ранг #${profile.rank}`, "text-neon-purple"))}
+            {aroundYou.map((profile) =>
+              renderProfileRow(
+                profile,
+                profile.auraGap === null
+                  ? `Ранг #${profile.rank}`
+                  : profile.auraGap >= 0
+                    ? `выше тебя на +${profile.auraGap}`
+                    : `ниже тебя на ${Math.abs(profile.auraGap)}`,
+                "text-neon-purple",
+              ),
+            )}
           </div>
         </section>
       ) : (
         <InlineStateCard
           eyebrow="Разведка"
           title="Соседей по гонке пока нет"
-          description="Набор вокруг твоей позиции появится, когда наберётся достаточно активных профилей."
+          description="Подборка вокруг твоей позиции появится, когда в системе наберётся больше активных профилей."
         />
       )}
+
+      <section className="w-full rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Почти новый tier</p>
+        <div className="mt-3 space-y-2">
+          {nearTier.length ? (
+            nearTier.map((profile) =>
+              renderProfileRow(profile, `до ${profile.tierLabel} осталось +${profile.pointsToTier}`, "text-neon-green"),
+            )
+          ) : (
+            <InlineStateCard
+              title="Пока нет явных кандидатов на новый tier"
+              description="Секция оживает, когда в таблице появляются профили у самой границы следующего статуса."
+            />
+          )}
+        </div>
+      </section>
 
       <section className="w-full rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Кто на хайпе (24ч)</p>
@@ -167,7 +224,10 @@ export default function DiscoverHub() {
               ),
             )
           ) : (
-            <InlineStateCard title="Пока нет голосов за последние 24 часа" description="Как только начнётся движение, здесь появятся самые обсуждаемые профили." />
+            <InlineStateCard
+              title="Пока нет голосов за последние 24 часа"
+              description="Как только начнётся движение, здесь появятся самые обсуждаемые профили."
+            />
           )}
         </div>
       </section>
@@ -180,7 +240,10 @@ export default function DiscoverHub() {
               renderProfileRow(profile, `#${profile.rank} · +${profile.growthPoints} ауры`, "text-neon-green"),
             )
           ) : (
-            <InlineStateCard title="Рост за 24 часа пока пуст" description="Лента заполнится, когда в системе накопится больше заметных изменений ауры." />
+            <InlineStateCard
+              title="Рост за 24 часа пока пуст"
+              description="Лента заполнится, когда в системе накопится больше заметных изменений ауры."
+            />
           )}
         </div>
       </section>
@@ -190,15 +253,20 @@ export default function DiscoverHub() {
         <div className="mt-3 space-y-2">
           {newProfiles.length ? (
             newProfiles.map((profile) =>
-              renderProfileRow(profile, `Создан: ${formatShortDate(profile.createdAt)} UTC+0`, "text-white/90"),
+              renderProfileRow(profile, `создан: ${formatShortDate(profile.createdAt)} UTC+0`, "text-white/90"),
             )
           ) : (
-            <InlineStateCard title="Новых профилей пока нет" description="Когда пользователи начнут заходить, здесь появится свежий поток регистраций." />
+            <InlineStateCard
+              title="Новых профилей пока нет"
+              description="Когда пользователи начнут чаще заходить, здесь появится свежий поток регистраций."
+            />
           )}
         </div>
       </section>
 
-      <p className="text-[10px] uppercase tracking-[0.08em] text-white/40">Обновлено: {formatShortDate(payload.generatedAt)} UTC+0</p>
+      <p className="text-[10px] uppercase tracking-[0.08em] text-white/40">
+        Обновлено: {formatShortDate(payload.generatedAt)} UTC+0
+      </p>
     </div>
   );
 }

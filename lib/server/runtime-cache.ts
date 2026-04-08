@@ -2,6 +2,7 @@ import "server-only";
 
 type CacheEntry<T> = {
   expiresAt: number;
+  staleUntil: number;
   value: T;
 };
 
@@ -34,14 +35,24 @@ export async function getOrSetRuntimeCache<T>(key: string, ttlMs: number, loader
     return existingInflight;
   }
 
+  const staleValue = cached && cached.staleUntil > now ? cached.value : undefined;
+
   const loadPromise = loader()
     .then((value) => {
       runtimeCache.set(key, {
         value,
         expiresAt: Date.now() + ttlMs,
+        staleUntil: Date.now() + ttlMs * 4,
       });
 
       return value;
+    })
+    .catch((error) => {
+      if (staleValue !== undefined) {
+        return staleValue;
+      }
+
+      throw error;
     })
     .finally(() => {
       inflightCache.delete(key);
@@ -56,4 +67,11 @@ export function buildCacheControl(ttlMs: number, staleWhileRevalidateMs = ttlMs)
   const maxAgeSeconds = Math.max(1, Math.floor(ttlMs / 1000));
   const staleSeconds = Math.max(maxAgeSeconds, Math.floor(staleWhileRevalidateMs / 1000));
   return `public, max-age=0, s-maxage=${maxAgeSeconds}, stale-while-revalidate=${staleSeconds}`;
+}
+
+export function invalidateRuntimeCache(keys: string[]) {
+  for (const key of keys) {
+    runtimeCache.delete(key);
+    inflightCache.delete(key);
+  }
 }

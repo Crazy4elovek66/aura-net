@@ -1,3 +1,8 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+
 interface ShareableMoment {
   id: string;
   moment_type: string;
@@ -5,68 +10,271 @@ interface ShareableMoment {
   created_at: string;
 }
 
+interface ShareableMomentsCardProps {
+  moments: ShareableMoment[];
+  username: string;
+  displayName: string;
+  profileShareLink: string;
+  inviteLink: string | null;
+}
+
 const MOMENT_LABELS: Record<string, string> = {
-  achievement_unlocked: "Новое достижение",
+  achievement_unlocked: "Достижение",
   tier_reached: "Новый tier",
-  weekly_title_awarded: "Weekly title",
-  streak_milestone: "Этап серии",
+  weekly_title_awarded: "Титул недели",
+  streak_milestone: "Milestone серии",
   leaderboard_top10_entered: "Вход в топ-10",
-  referral_activated: "Активированный invite",
+  referral_activated: "Инвайт сработал",
 };
 
-function getMomentDescription(moment: ShareableMoment) {
+function asNumber(value: unknown) {
+  return typeof value === "number" ? value : Number(value || 0);
+}
+
+function getMomentHeadline(moment: ShareableMoment) {
   const payload = moment.payload || {};
 
   if (moment.moment_type === "achievement_unlocked") {
-    return typeof payload.achievementTitle === "string" ? payload.achievementTitle : "Достижение открыто";
+    return typeof payload.achievementTitle === "string" ? payload.achievementTitle : "Новое достижение";
   }
 
   if (moment.moment_type === "tier_reached") {
-    return typeof payload.tierLabel === "string" ? payload.tierLabel : "Новый статус";
+    return typeof payload.tierLabel === "string" ? `Вышел в ${payload.tierLabel}` : "Открыл новый tier";
   }
 
   if (moment.moment_type === "weekly_title_awarded") {
-    return typeof payload.title === "string" ? payload.title : "Новый weekly title";
+    return typeof payload.title === "string" ? payload.title : "Новый недельный титул";
   }
 
   if (moment.moment_type === "streak_milestone") {
-    return typeof payload.milestoneDays === "number" ? `${payload.milestoneDays} дней` : "Новая серия";
+    return typeof payload.milestoneDays === "number" ? `${payload.milestoneDays} дней подряд` : "Новый этап серии";
   }
 
   if (moment.moment_type === "leaderboard_top10_entered") {
-    return typeof payload.rank === "number" ? `Позиция #${payload.rank}` : "Новый публичный статус";
+    return typeof payload.rank === "number" ? `Теперь я в топ-${payload.rank}` : "Вошёл в топ-10";
   }
 
   if (moment.moment_type === "referral_activated") {
-    return typeof payload.inviterReward === "number" ? `+${payload.inviterReward} ауры` : "Приглашение активировано";
+    return typeof payload.inviterReward === "number" ? `Инвайт дал +${payload.inviterReward} ауры` : "Приглашение активировано";
   }
 
-  return "Готово к шерингу";
+  return "Есть повод показать карточку";
 }
 
-export default function ShareableMomentsCard({ moments }: { moments: ShareableMoment[] }) {
-  return (
-    <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-5 backdrop-blur-md">
-      <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Share Hooks</h2>
-      <p className="mt-2 text-[11px] text-white/45">Технические поводы для шеринга: tier, title, streak, achievement, top.</p>
+function getMomentReason(moment: ShareableMoment) {
+  const payload = moment.payload || {};
 
-      <div className="mt-3 space-y-2">
-        {moments.length ? (
-          moments.map((moment) => (
-            <div key={moment.id} className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] text-white/85">{MOMENT_LABELS[moment.moment_type] || moment.moment_type}</p>
-                <p className="text-[9px] uppercase tracking-[0.08em] text-white/40">{new Date(moment.created_at).toLocaleString("ru-RU")}</p>
-              </div>
-              <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-white/55">{getMomentDescription(moment)}</p>
-            </div>
-          ))
-        ) : (
-          <p className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] text-white/55">
-            Поводы для шеринга появятся после достижений, tier jumps, weekly titles и публичных апдейтов.
+  if (moment.moment_type === "achievement_unlocked") {
+    return "Это понятный публичный апдейт: людям легче реагировать на новый статус, чем на абстрактный рост.";
+  }
+
+  if (moment.moment_type === "tier_reached") {
+    return "Tier меняет ощущение от карточки, значит событие выглядит заметно даже без лишнего контекста.";
+  }
+
+  if (moment.moment_type === "weekly_title_awarded") {
+    return "Недельный титул живёт ограниченное время, поэтому им особенно естественно делиться сразу.";
+  }
+
+  if (moment.moment_type === "streak_milestone") {
+    return `Серия в ${asNumber(payload.milestoneDays)} дней выглядит как реальная дисциплина, а не случайный всплеск.`;
+  }
+
+  if (moment.moment_type === "leaderboard_top10_entered") {
+    return "Попадание в топ-10 создаёт хороший повод вернуть людей к твоему профилю именно сейчас.";
+  }
+
+  if (moment.moment_type === "referral_activated") {
+    return "Это сильный момент для нового захода: ты не просто растёшь сам, а запускаешь следующий круг через друга.";
+  }
+
+  return "Карточка уже выглядит живой, осталось дать ей понятный повод.";
+}
+
+function buildShareText(
+  moment: ShareableMoment,
+  displayName: string,
+  username: string,
+  profileShareLink: string,
+  inviteLink: string | null,
+) {
+  const payload = moment.payload || {};
+  let opener = `У ${displayName} (@${username}) новый момент в Aura.net.`;
+
+  if (moment.moment_type === "achievement_unlocked") {
+    opener = `Открыл достижение «${typeof payload.achievementTitle === "string" ? payload.achievementTitle : "новый апдейт"}» в Aura.net.`;
+  } else if (moment.moment_type === "tier_reached") {
+    opener = `Поднялся до tier «${typeof payload.tierLabel === "string" ? payload.tierLabel : "новый уровень"}».`;
+  } else if (moment.moment_type === "weekly_title_awarded") {
+    opener = `Получил недельный титул «${typeof payload.title === "string" ? payload.title : "новый титул"}».`;
+  } else if (moment.moment_type === "streak_milestone") {
+    opener = `Держу серию уже ${asNumber(payload.milestoneDays)} дней подряд.`;
+  } else if (moment.moment_type === "leaderboard_top10_entered") {
+    opener = `Залетел в топ-10 Aura.net${asNumber(payload.rank) > 0 ? ` на #${asNumber(payload.rank)}` : ""}.`;
+  } else if (moment.moment_type === "referral_activated") {
+    opener = `Инвайт в Aura.net сработал: ещё один человек активировался, а карточка получила +${asNumber(payload.inviterReward)} ауры.`;
+  }
+
+  return [
+    opener,
+    `Проверь мою карточку: ${profileShareLink}`,
+    inviteLink ? `Если хочешь зайти в игру сразу по приглашению: ${inviteLink}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export default function ShareableMomentsCard({
+  moments,
+  username,
+  displayName,
+  profileShareLink,
+  inviteLink,
+}: ShareableMomentsCardProps) {
+  const [copiedMomentId, setCopiedMomentId] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const resetTimerRef = useRef<number | null>(null);
+  const featuredMoment = moments[0] ?? null;
+
+  useEffect(() => {
+    return () => {
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopy = async (moment: ShareableMoment) => {
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("clipboard_unavailable");
+      }
+
+      const text = buildShareText(moment, displayName, username, profileShareLink, inviteLink);
+      await navigator.clipboard.writeText(text);
+      setCopyError(null);
+      setCopiedMomentId(moment.id);
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current);
+      }
+      resetTimerRef.current = window.setTimeout(() => {
+        setCopiedMomentId((current) => (current === moment.id ? null : current));
+      }, 1800);
+    } catch (error) {
+      console.error("[ShareableMomentsCard] Failed to copy share text", error);
+      setCopiedMomentId(null);
+      setCopyError("Не удалось скопировать текст автоматически. Скопируй его вручную по карточке момента.");
+    }
+  };
+
+  return (
+    <section
+      id="shareable-moments-card"
+      className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-5 backdrop-blur-md"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Поводы поделиться</h2>
+          <p className="mt-2 text-[11px] leading-relaxed text-white/55">
+            Не просто лог событий. Здесь лежат моменты, которые уже готовы стать сторис, сообщением другу или поводом вернуть
+            людей к твоей карточке.
           </p>
-        )}
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right">
+          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Сейчас доступно</p>
+          <p className="text-sm font-black text-white">{moments.length}</p>
+        </div>
       </div>
+
+      {featuredMoment ? (
+        <div className="mt-4 rounded-[1.75rem] border border-neon-purple/25 bg-neon-purple/[0.08] p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-[0.14em] text-neon-purple/90">
+                Лучший момент сейчас
+              </p>
+              <p className="mt-2 text-sm font-black text-white">
+                {MOMENT_LABELS[featuredMoment.moment_type] || featuredMoment.moment_type}
+              </p>
+              <p className="mt-1 text-lg font-black text-white">{getMomentHeadline(featuredMoment)}</p>
+            </div>
+            <p className="text-[9px] uppercase tracking-[0.08em] text-white/45">{formatDate(featuredMoment.created_at)}</p>
+          </div>
+
+          <p className="mt-3 text-[11px] leading-relaxed text-white/70">{getMomentReason(featuredMoment)}</p>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => handleCopy(featuredMoment)}
+              className="rounded-xl border border-neon-purple/35 bg-neon-purple/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-neon-purple transition-colors hover:bg-neon-purple/15"
+            >
+              {copiedMomentId === featuredMoment.id ? "Текст скопирован" : "Скопировать текст"}
+            </button>
+            <Link
+              href={profileShareLink}
+              className="rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-white/75 transition-colors hover:border-white/25"
+            >
+              Открыть карточку
+            </Link>
+            {inviteLink ? (
+              <a
+                href={inviteLink}
+                className="rounded-xl border border-neon-green/30 bg-neon-green/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-neon-green transition-colors hover:bg-neon-green/15"
+              >
+                Приложить инвайт
+              </a>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-[11px] leading-relaxed text-white/58">
+          Пока без свежих моментов. Они появятся после достижений, титулов недели, входа в топ-10, milestones серии и
+          активации инвайтов.
+        </p>
+      )}
+
+      {copyError ? (
+        <p className="mt-3 rounded-2xl border border-neon-pink/20 bg-neon-pink/[0.06] px-3 py-2 text-[10px] uppercase tracking-[0.08em] text-neon-pink/90">
+          {copyError}
+        </p>
+      ) : null}
+
+      {moments.length > 1 ? (
+        <div className="mt-3 space-y-2">
+          {moments.slice(1).map((moment) => (
+            <div key={moment.id} className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/55">
+                    {MOMENT_LABELS[moment.moment_type] || moment.moment_type}
+                  </p>
+                  <p className="mt-1 text-sm text-white/90">{getMomentHeadline(moment)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(moment)}
+                  className="shrink-0 rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.1em] text-white/70 transition-colors hover:border-white/25"
+                >
+                  {copiedMomentId === moment.id ? "Скопировано" : "Копировать"}
+                </button>
+              </div>
+              <p className="mt-2 text-[10px] uppercase tracking-[0.08em] text-white/45">
+                {formatDate(moment.created_at)} UTC+0
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }

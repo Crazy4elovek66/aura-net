@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DAILY_REWARD_CAP } from "@/lib/economy";
 
@@ -49,7 +49,6 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
   const [loading, setLoading] = useState(false);
   const [lastClaim, setLastClaim] = useState<ClaimBreakdown | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const refreshTimeoutRef = useRef<number | null>(null);
 
   const capReached = useMemo(() => state.nextReward >= DAILY_REWARD_CAP, [state.nextReward]);
   const isClaimed = !state.canClaim;
@@ -69,14 +68,6 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
   useEffect(() => {
     setState(initialState);
   }, [initialState]);
-
-  useEffect(() => {
-    return () => {
-      if (refreshTimeoutRef.current !== null) {
-        window.clearTimeout(refreshTimeoutRef.current);
-      }
-    };
-  }, []);
 
   const handleClaim = async () => {
     if (!state.canClaim || loading) return;
@@ -140,13 +131,9 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
           weeklyTargetDays: weeklyTarget,
         });
 
-        if (refreshTimeoutRef.current !== null) {
-          window.clearTimeout(refreshTimeoutRef.current);
-        }
-
-        refreshTimeoutRef.current = window.setTimeout(() => {
+        startTransition(() => {
           router.refresh();
-        }, 300);
+        });
       } else {
         setState((prev) => ({
           ...prev,
@@ -163,7 +150,7 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
   };
 
   return (
-    <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
+    <section id="daily-reward-card" className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Ежедневная награда</h2>

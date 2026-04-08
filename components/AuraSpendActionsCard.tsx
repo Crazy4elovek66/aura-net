@@ -8,7 +8,7 @@ import {
   STREAK_RESCUE_COST,
 } from "@/lib/economy";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useNotice } from "@/components/notice/NoticeProvider";
 
 interface AuraSpendActionsCardProps {
@@ -65,6 +65,7 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
   const { notify } = useNotice();
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [state, setState] = useState(initialState);
+  const [isRefreshing, startRefreshTransition] = useTransition();
 
   useEffect(() => {
     setState(initialState);
@@ -73,9 +74,10 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
   const shieldActive = useMemo(() => isActive(state.decayShieldUntil), [state.decayShieldUntil]);
   const spotlightActive = useMemo(() => isActive(state.spotlightUntil), [state.spotlightUntil]);
   const accentActive = useMemo(() => isActive(state.cardAccentUntil), [state.cardAccentUntil]);
+  const actionLocked = pendingAction !== null || isRefreshing;
 
   const runAction = async (action: PendingAction, variant?: string) => {
-    if (!action || pendingAction) return;
+    if (!action || actionLocked) return;
 
     setPendingAction(action);
 
@@ -109,7 +111,9 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
           variant: "success",
           title: "Фокус активирован",
         });
-        router.refresh();
+        startRefreshTransition(() => {
+          router.refresh();
+        });
         return;
       }
 
@@ -168,7 +172,9 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
         });
       }
 
-      router.refresh();
+      startRefreshTransition(() => {
+        router.refresh();
+      });
     } catch {
       notify({
         variant: "error",
@@ -199,7 +205,7 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
             <button
               type="button"
               onClick={() => runAction("decay_shield")}
-              disabled={pendingAction !== null || shieldActive}
+              disabled={actionLocked || shieldActive}
               className="rounded-xl border border-neon-green/40 px-3 py-2 text-[10px] font-black uppercase tracking-[0.15em] text-neon-green disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {pendingAction === "decay_shield" ? "..." : `-${DECAY_SHIELD_COST}`}
@@ -222,7 +228,7 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
             <button
               type="button"
               onClick={() => runAction("streak_save")}
-              disabled={pendingAction !== null || !state.canRescueStreak}
+              disabled={actionLocked || !state.canRescueStreak}
               className="rounded-xl border border-neon-purple/40 px-3 py-2 text-[10px] font-black uppercase tracking-[0.15em] text-neon-purple disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {pendingAction === "streak_save" ? "..." : `-${STREAK_RESCUE_COST}`}
@@ -243,7 +249,7 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
             <button
               type="button"
               onClick={() => runAction("spotlight")}
-              disabled={pendingAction !== null || spotlightActive}
+              disabled={actionLocked || spotlightActive}
               className="rounded-xl border border-neon-pink/40 px-3 py-2 text-[10px] font-black uppercase tracking-[0.15em] text-neon-pink disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {pendingAction === "spotlight" ? "..." : `-${SPOTLIGHT_COST}`}
@@ -264,7 +270,7 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
                 key={variant}
                 type="button"
                 onClick={() => runAction("card_accent", variant)}
-                disabled={pendingAction !== null || accentActive}
+                disabled={actionLocked || accentActive}
                 className="rounded-xl border border-white/15 bg-white/[0.02] px-2 py-2 text-[10px] font-black uppercase tracking-[0.08em] text-white/80 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {pendingAction === "card_accent" ? "..." : `${ACCENT_LABELS[variant]} • -${CARD_ACCENT_COST}`}
@@ -295,6 +301,10 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
           ))}
         </div>
       </div>
+
+      {isRefreshing && (
+        <p className="mt-3 text-[10px] uppercase tracking-[0.08em] text-white/45">Обновляем профиль…</p>
+      )}
     </section>
   );
 }

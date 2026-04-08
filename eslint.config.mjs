@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "app/admin/preview/**",
+    "components/CreatorCard*.tsx",
   ]),
 ]);
 

@@ -25,6 +25,11 @@ interface SpotlightLeader extends BaseLeader {
   spotlightUntil: string;
 }
 
+interface NearTierLeader extends RankedLeader {
+  tierLabel: string;
+  pointsToTier: number;
+}
+
 interface WeeklyTitle {
   key: string;
   title: string;
@@ -47,6 +52,14 @@ interface PersonalContext {
   above: BaseLeader | null;
   below: BaseLeader | null;
   aroundYou: RankedLeader[];
+  returnPulse: {
+    trackedAt: string | null;
+    previousRank: number | null;
+    auraDelta: number;
+    newAchievements: number;
+    newMoments: number;
+    pendingEvents: number;
+  } | null;
 }
 
 interface LeaderboardPayload {
@@ -58,6 +71,10 @@ interface LeaderboardPayload {
     spotlight: SpotlightLeader[];
     weeklyTitles: WeeklyTitle[];
   };
+  live: {
+    cutlineTop10: RankedLeader[];
+    nearTier: NearTierLeader[];
+  };
   personalContext: PersonalContext | null;
 }
 
@@ -68,7 +85,7 @@ const TAB_LABELS: Record<LeaderboardTabKey, string> = {
   spotlight: "В фокусе",
 };
 
-function formatShortDate(iso: string) {
+function formatShortDate(iso: string | null) {
   if (!iso) return "-";
   return new Date(iso).toLocaleString("ru-RU", {
     day: "2-digit",
@@ -147,7 +164,7 @@ export default function LeaderboardHub() {
       <InlineStateCard
         eyebrow="Лидерборд"
         title="Загружаем гонку ауры"
-        description="Собираем места, рост и фокус-позиции."
+        description="Собираем места, рост, линию топ-10 и твой персональный контекст."
       />
     );
   }
@@ -166,6 +183,8 @@ export default function LeaderboardHub() {
   }
 
   const my = payload.personalContext;
+  const rankShift =
+    my?.returnPulse?.previousRank && my.rank ? my.returnPulse.previousRank - my.rank : null;
 
   return (
     <div className="w-full space-y-5">
@@ -179,13 +198,44 @@ export default function LeaderboardHub() {
             </div>
             <div className="rounded-2xl border border-white/15 bg-black/25 p-3">
               <p className="text-[10px] uppercase tracking-[0.12em] text-white/45">До следующего места</p>
-              <p className="mt-1 text-xl font-black text-neon-green">+{my.distanceToNext}</p>
+              <p className="mt-1 text-xl font-black text-neon-green">
+                {my.distanceToNext > 0 ? `+${my.distanceToNext}` : "обгон"}
+              </p>
             </div>
             <div className="rounded-2xl border border-white/15 bg-black/25 p-3">
               <p className="text-[10px] uppercase tracking-[0.12em] text-white/45">До топ-10</p>
-              <p className="mt-1 text-xl font-black text-neon-pink">{my.distanceToTop10 > 0 ? `+${my.distanceToTop10}` : "Ты в топ-10"}</p>
+              <p className="mt-1 text-xl font-black text-neon-pink">
+                {my.distanceToTop10 > 0 ? `+${my.distanceToTop10}` : "ты в топ-10"}
+              </p>
             </div>
           </div>
+
+          {my.returnPulse ? (
+            <div className="mt-3 rounded-2xl border border-white/15 bg-black/25 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.1em] text-white/45">Что изменилось с прошлого захода</p>
+                  <p className="mt-1 text-[11px] text-white/65">
+                    Точка отсчёта: {formatShortDate(my.returnPulse.trackedAt)} UTC+0
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.08em]">
+                  <span className={`rounded-full border px-2.5 py-1 ${my.returnPulse.auraDelta >= 0 ? "border-neon-green/30 bg-neon-green/10 text-neon-green" : "border-neon-pink/30 bg-neon-pink/10 text-neon-pink"}`}>
+                    aura {my.returnPulse.auraDelta >= 0 ? `+${my.returnPulse.auraDelta}` : my.returnPulse.auraDelta}
+                  </span>
+                  <span className="rounded-full border border-white/15 bg-white/[0.03] px-2.5 py-1 text-white/80">
+                    {rankShift === null ? "ранг без истории" : rankShift > 0 ? `ранг +${rankShift}` : rankShift < 0 ? `ранг ${rankShift}` : "ранг без смены"}
+                  </span>
+                  <span className="rounded-full border border-white/15 bg-white/[0.03] px-2.5 py-1 text-white/80">
+                    моментов {my.returnPulse.newMoments}
+                  </span>
+                  <span className="rounded-full border border-white/15 bg-white/[0.03] px-2.5 py-1 text-white/80">
+                    достижений {my.returnPulse.newAchievements}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {my.above ? (
@@ -211,9 +261,32 @@ export default function LeaderboardHub() {
                 <p className="text-[11px] font-black text-neon-pink">{my.below.auraPoints}</p>
               </Link>
             ) : (
-              <InlineStateCard title="Снизу пока никого" description="Рядом с твоей позицией нет следующего профиля." />
+              <InlineStateCard title="Снизу пока никого" description="Рядом с твоей позицией сейчас нет следующего профиля." />
             )}
           </div>
+
+          {my.aroundYou.length > 0 ? (
+            <div className="mt-3 rounded-2xl border border-white/15 bg-black/25 p-3">
+              <p className="text-[10px] uppercase tracking-[0.1em] text-white/45">Локальный срез вокруг тебя</p>
+              <div className="mt-2 space-y-2">
+                {my.aroundYou.map((profile) => (
+                  <Link
+                    key={`${profile.id}-${profile.rank}`}
+                    href={`/check/${profile.username}?returnTo=leaderboard`}
+                    className={`flex items-center justify-between rounded-xl border px-3 py-2 transition-colors hover:border-neon-purple/35 ${
+                      profile.id === my.profileId ? "border-neon-purple/35 bg-neon-purple/10" : "border-white/10 bg-white/[0.02]"
+                    }`}
+                  >
+                    <p className="truncate pr-3 text-[11px] text-white/85">
+                      <span className="mr-2 text-white/45">#{profile.rank}</span>
+                      {profile.displayName}
+                    </p>
+                    <p className="text-[11px] font-black text-white">{profile.auraPoints}</p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : (
         <InlineStateCard
@@ -241,6 +314,51 @@ export default function LeaderboardHub() {
           </div>
         </section>
       )}
+
+      <section className="grid gap-5 lg:grid-cols-2">
+        <div className="rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Линия топ-10</p>
+          <div className="mt-3 space-y-2">
+            {payload.live.cutlineTop10.map((profile) => (
+              <Link
+                key={`${profile.id}-${profile.rank}`}
+                href={`/check/${profile.username}?returnTo=leaderboard`}
+                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2 hover:border-neon-purple/40 transition-colors"
+              >
+                <p className="truncate pr-3 text-sm text-white/90">
+                  <span className="mr-2 text-white/45">#{profile.rank}</span>
+                  {profile.displayName}
+                </p>
+                <p className="text-sm font-black text-white">{profile.auraPoints}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Почти новый tier</p>
+          <div className="mt-3 space-y-2">
+            {payload.live.nearTier.map((profile) => (
+              <Link
+                key={`${profile.id}-${profile.rank}`}
+                href={`/check/${profile.username}?returnTo=leaderboard`}
+                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2 hover:border-neon-purple/40 transition-colors"
+              >
+                <div className="min-w-0 pr-3">
+                  <p className="truncate text-sm text-white/90">
+                    <span className="mr-2 text-white/45">#{profile.rank}</span>
+                    {profile.displayName}
+                  </p>
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-white/45">
+                    до {profile.tierLabel} осталось +{profile.pointsToTier}
+                  </p>
+                </div>
+                <p className="text-sm font-black text-neon-green">{profile.auraPoints}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <section className="w-full rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
         <div className="flex flex-wrap gap-2">
@@ -281,7 +399,9 @@ export default function LeaderboardHub() {
                       {row.displayName}
                     </p>
                     {isSpotlight && spotlightUntil ? (
-                      <p className="text-[10px] uppercase tracking-[0.08em] text-white/45">до {formatShortDate(spotlightUntil)} UTC+0</p>
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-white/45">
+                        до {formatShortDate(spotlightUntil)} UTC+0
+                      </p>
                     ) : null}
                   </div>
                   <div className="text-right">
