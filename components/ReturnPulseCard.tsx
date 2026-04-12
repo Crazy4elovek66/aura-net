@@ -1,4 +1,4 @@
-interface ReturnPulseCardProps {
+﻿interface ReturnPulseCardProps {
   trackedAt: string | null;
   currentRank: number | null;
   previousRank: number | null;
@@ -45,15 +45,15 @@ export default function ReturnPulseCard({
     <section className="w-full max-w-xl rounded-3xl border border-neon-green/25 bg-neon-green/[0.07] p-5 backdrop-blur-md">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-neon-green/90">Что изменилось</h2>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-neon-green/90">С последнего входа</h2>
           <p className="mt-2 text-[11px] leading-relaxed text-white/70">
             {hasTrackedState
-              ? `Сводка с последнего трека от ${formatDate(trackedAt)} UTC+0.`
-              : "Первый заметный срез ещё не накоплен. После следующего цикла появится понятная дельта."}
+              ? `Короткая сводка изменений с ${formatDate(trackedAt)} UTC+0.`
+              : "Пока это первый срез. После следующего цикла появится понятная динамика."}
           </p>
         </div>
         <div className="rounded-2xl border border-neon-green/20 bg-black/20 px-3 py-2 text-right">
-          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Движение</p>
+          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Изменение ауры</p>
           <p className={`text-sm font-black ${auraDelta >= 0 ? "text-neon-green" : "text-neon-pink"}`}>
             {auraDelta >= 0 ? `+${auraDelta}` : auraDelta}
           </p>
@@ -84,21 +84,21 @@ export default function ReturnPulseCard({
             <p className="mt-2 text-lg font-black text-white">{newAchievements}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-            <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Моменты</p>
+            <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Поводы</p>
             <p className="mt-2 text-lg font-black text-white">{newMoments}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-            <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Инвайт-петля</p>
+            <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Инвайты</p>
             <p className="mt-2 text-lg font-black text-white">{activatedReferrals}</p>
           </div>
         </div>
 
         <div className="mx-3 mb-3 rounded-2xl border border-white/10 bg-black/20 p-3">
-          <p className="text-[10px] uppercase tracking-[0.1em] text-white/45">Что ждёт тебя сейчас</p>
+          <p className="text-[10px] uppercase tracking-[0.1em] text-white/45">Что дальше</p>
           <p className="mt-2 text-[11px] leading-relaxed text-white/68">
             {pendingEvents > 0
-              ? `В очереди ещё ${pendingEvents} событий. Есть повод вернуться к карточке, моментам и гонке прямо сейчас.`
-              : "Очередь тихая: главный фокус сейчас в гонке, новых голосах и движении твоего круга."}
+              ? `В очереди еще ${pendingEvents} событий. Есть смысл вернуться к карточке и кругу уже сейчас.`
+              : "Очередь пустая. Главный фокус сейчас: гонка, голоса и движение по инвайтам."}
           </p>
         </div>
       </details>

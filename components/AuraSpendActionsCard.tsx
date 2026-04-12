@@ -191,15 +191,15 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
     <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Траты ауры</h2>
-          <p className="mt-1 text-[11px] text-white/45">Осмысленные действия с лимитами и сроком действия.</p>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Эффекты за ауру</h2>
+          <p className="mt-1 text-[11px] text-white/45">Короткие усиления с понятной ценой и таймером.</p>
         </div>
         <button
           type="button"
           onClick={() => setIsPreviewOpen(true)}
           className="rounded-xl border border-white/15 bg-white/[0.03] px-3 py-2 text-[10px] font-black uppercase tracking-[0.1em] text-white/75 transition-colors hover:border-white/25"
         >
-          Посмотреть эффекты
+          Предпросмотр
         </button>
       </div>
 
@@ -207,11 +207,11 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Щит от угасания (24ч)</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Щит от угасания · 24ч</p>
               <p className="text-[10px] text-white/50">
                 {shieldActive
                   ? `Активен до ${formatDate(state.decayShieldUntil)} (UTC+0)`
-                  : "Блокирует ежедневное угасание на ограниченное время."}
+                  : "Отключает ежедневное угасание на сутки."}
               </p>
             </div>
             <button
@@ -228,13 +228,13 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Сохранение серии</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Спасти серию</p>
               <p className="text-[10px] text-white/50">
                 {state.canRescueStreak
                   ? `Доступно сейчас. Текущая серия: ${state.streak} дн.`
                   : state.rescueAvailableAt
                     ? `Перезарядка до ${formatDate(state.rescueAvailableAt)} (UTC+0)`
-                    : "Доступно только при 1 пропущенном дне и активной серии."}
+                    : "Работает при одном пропуске и активной серии."}
               </p>
             </div>
             <button
@@ -251,11 +251,11 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Фокус (15 мин)</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Фокус · 15 мин</p>
               <p className="text-[10px] text-white/50">
                 {spotlightActive
                   ? `Активен до ${formatDate(state.spotlightUntil)} (UTC+0)`
-                  : "Временная видимость профиля в отдельном блоке лидерборда."}
+                  : "Временное усиление видимости в отдельном блоке лидерборда."}
               </p>
             </div>
             <button
@@ -270,11 +270,11 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Временный акцент карточки (24ч)</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Акцент карточки · 24ч</p>
           <p className="mt-1 text-[10px] text-white/50">
             {accentActive
               ? `Активен: ${ACCENT_LABELS[state.cardAccent || ""] || state.cardAccent} до ${formatDate(state.cardAccentUntil)} (UTC+0)`
-              : "Один контролируемый визуальный эффект без хаоса в стиле."}
+              : "Визуальный акцент без перегруза интерфейса."}
           </p>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
             {CARD_ACCENT_VARIANTS.map((variant) => (
@@ -301,7 +301,7 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/75">Предпросмотр эффектов</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-white/55">
-                  Эффекты применяются только на ограниченное время. Здесь можно быстро оценить стиль перед покупкой.
+                  Быстрый просмотр перед покупкой эффекта.
                 </p>
               </div>
               <button
@@ -315,7 +315,7 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
 
             <div className="mt-4 rounded-xl border border-neon-pink/30 bg-neon-pink/5 p-3">
               <p className="text-[10px] font-black uppercase tracking-[0.08em] text-neon-pink">Фокус</p>
-              <p className="mt-1 text-[10px] text-white/55">Профиль попадает во вкладку «В фокусе» и выделяется меткой времени.</p>
+              <p className="mt-1 text-[10px] text-white/55">Профиль попадает во вкладку «В фокусе» и получает метку таймера.</p>
             </div>
 
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">

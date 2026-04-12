@@ -16,7 +16,7 @@ const EVENT_LABELS: Record<string, string> = {
   streak_reminder: "Напоминание о серии",
   leaderboard_top10_entered: "Вход в топ-10",
   leaderboard_top10_dropped: "Вылет из топ-10",
-  weekly_title_awarded: "Тайтл недели",
+  weekly_title_awarded: "Титул недели",
   tier_reached: "Новый уровень",
 };
 
@@ -65,9 +65,9 @@ function getDetails(event: ReengagementEvent) {
 export default function ReengagementEventsCard({ events }: ReengagementEventsCardProps) {
   return (
     <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-5 backdrop-blur-md">
-      <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Очередь касаний</h2>
+      <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Очередь уведомлений</h2>
       <p className="mt-2 text-[11px] text-white/45">
-        Здесь видно, что уже улетело в Telegram, что ждёт отправки и где системе нужен ещё один заход.
+        Здесь видно, что уже ушло в Telegram, что ждет отправки и где системе нужен повтор.
       </p>
 
       <div className="mt-3 space-y-2">
@@ -90,7 +90,7 @@ export default function ReengagementEventsCard({ events }: ReengagementEventsCar
           ))
         ) : (
           <p className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] text-white/55">
-            Пока тихо. События появятся после голосов, тайтлов недели, апов по рейтингу и других заметных движений.
+            Пока тихо. События появятся после голосов, титулов, движений в рейтинге и других заметных изменений.
           </p>
         )}
       </div>

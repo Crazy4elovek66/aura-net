@@ -82,7 +82,7 @@ const TAB_LABELS: Record<LeaderboardTabKey, string> = {
   allTime: "Топ за всё время",
   growth7d: "Рост за 7 дней",
   growth24h: "Рост за 24 часа",
-  spotlight: "В фокусе",
+  spotlight: "Фокус",
 };
 
 function formatShortDate(iso: string | null) {
@@ -197,7 +197,7 @@ export default function LeaderboardHub() {
               <p className="mt-1 text-xl font-black text-neon-purple">#{my.rank}</p>
             </div>
             <div className="rounded-2xl border border-white/15 bg-black/25 p-3">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-white/45">До следующего места</p>
+              <p className="text-[10px] uppercase tracking-[0.12em] text-white/45">До следующего ранга</p>
               <p className="mt-1 text-xl font-black text-neon-green">
                 {my.distanceToNext > 0 ? `+${my.distanceToNext}` : "обгон"}
               </p>
@@ -221,10 +221,10 @@ export default function LeaderboardHub() {
                 </div>
                 <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.08em]">
                   <span className={`rounded-full border px-2.5 py-1 ${my.returnPulse.auraDelta >= 0 ? "border-neon-green/30 bg-neon-green/10 text-neon-green" : "border-neon-pink/30 bg-neon-pink/10 text-neon-pink"}`}>
-                    aura {my.returnPulse.auraDelta >= 0 ? `+${my.returnPulse.auraDelta}` : my.returnPulse.auraDelta}
+                    аура {my.returnPulse.auraDelta >= 0 ? `+${my.returnPulse.auraDelta}` : my.returnPulse.auraDelta}
                   </span>
                   <span className="rounded-full border border-white/15 bg-white/[0.03] px-2.5 py-1 text-white/80">
-                    {rankShift === null ? "ранг без истории" : rankShift > 0 ? `ранг +${rankShift}` : rankShift < 0 ? `ранг ${rankShift}` : "ранг без смены"}
+                      {rankShift === null ? "ранг без истории" : rankShift > 0 ? `ранг +${rankShift}` : rankShift < 0 ? `ранг ${rankShift}` : "без смены"}
                   </span>
                   <span className="rounded-full border border-white/15 bg-white/[0.03] px-2.5 py-1 text-white/80">
                     моментов {my.returnPulse.newMoments}
@@ -336,7 +336,7 @@ export default function LeaderboardHub() {
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Почти новый tier</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Почти новый уровень</p>
           <div className="mt-3 space-y-2">
             {payload.live.nearTier.map((profile) => (
               <Link

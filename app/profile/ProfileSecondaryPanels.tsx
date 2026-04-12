@@ -270,10 +270,10 @@ export default async function ProfileSecondaryPanels({
           const referral = referrals.find((entry) => entry.inviteeId === row.id);
           relationLabel =
             referral?.status === "activated"
-              ? "ты пригласил, петля уже закрылась"
+              ? "ты пригласил, уже активирован"
               : referral?.hasFirstClaim
-                ? "ты пригласил, ждём активность"
-                : "ты пригласил, ждём первый вход";
+                ? "ты пригласил, ждем действие"
+                : "ты пригласил, ждем первый вход";
         }
 
         return {

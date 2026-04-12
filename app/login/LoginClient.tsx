@@ -40,13 +40,13 @@ function getErrorMessage(error: unknown, fallback: string) {
 function mapLoginError(errorCode: string | null, reason: string | null) {
   switch (errorCode) {
     case "config":
-      return "Вход через браузер сейчас не работает: серверная Telegram-авторизация не настроена.";
+      return "Вход через браузер сейчас недоступен: Telegram-авторизация на сервере не настроена.";
     case "telegram_widget_failed":
       return reason ? `Вход через Telegram сорвался: ${reason}` : "Вход через Telegram сорвался.";
     case "exchange_failed":
-      return "Не получилось обменять код авторизации на сессию.";
+      return "Не удалось обменять код авторизации на сессию.";
     case "no_session":
-      return "Сессия после входа не появилась. Попробуй ещё раз.";
+      return "Сессия после входа не появилась. Попробуй еще раз.";
     default:
       return null;
   }
@@ -309,17 +309,16 @@ export default function LoginClient({
             </h1>
           </Link>
 
-          <h2 className="text-2xl font-bold mb-3">{tmaDetected ? "Входим..." : "Добро пожаловать"}</h2>
+          <h2 className="text-2xl font-bold mb-3">{tmaDetected ? "Входим..." : "Вход в Aura"}</h2>
           <p className="text-muted mb-10 italic text-sm">
-            {tmaDetected ? "Подтверждаем вход через Telegram" : "Вход только через подтверждённый Telegram-аккаунт"}
+            {tmaDetected ? "Подтверждаем вход через Telegram" : "Нужен подтвержденный Telegram-аккаунт"}
           </p>
 
           {referralCode ? (
             <div className="mb-6 rounded-2xl border border-neon-green/25 bg-neon-green/[0.08] p-4 text-left">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neon-green/90">Вход по приглашению</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neon-green/90">Вход по инвайту</p>
               <p className="mt-2 text-[11px] leading-relaxed text-white/72">
-                Инвайт уже подхватится автоматически. После первого ежедневного входа и первого живого действия внутри
-                продукта активируется бонус для тебя и награда для пригласившего.
+                Инвайт уже привязан. После первого входа и первого действия в карточке активируются бонусы.
               </p>
             </div>
           ) : null}
@@ -356,7 +355,7 @@ export default function LoginClient({
               <div className="rounded-2xl border border-amber-300/30 bg-amber-300/10 p-4 text-left">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200">Вход только из Telegram</p>
                 <p className="mt-2 text-[11px] leading-relaxed text-white/70">
-                  Этот деплой сейчас рассчитан только на Telegram Mini App. Снаружи не показываем сломанный виджет и не ведём в тупик.
+                  Этот деплой рассчитан только на Telegram Mini App. Снаружи вход отключен, чтобы не вести в тупик.
                 </p>
               </div>
             ) : null}
@@ -365,7 +364,7 @@ export default function LoginClient({
               <div className="w-full rounded-2xl border border-neon-green/30 bg-neon-green/10 p-4 text-left">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neon-green">Dev login for localhost</p>
                 <p className="mt-2 text-[11px] leading-relaxed text-white/72">
-                  Использует тестовый аккаунт и создаёт обычную Supabase-сессию.
+                  Использует тестовый аккаунт и создает обычную Supabase-сессию.
                 </p>
                 <button
                   type="button"

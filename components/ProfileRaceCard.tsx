@@ -132,7 +132,7 @@ export default function ProfileRaceCard({ raceContext, weeklyTitles, auraPoints,
             {dailyStreak > 0 ? `${dailyStreak} дн. подряд` : "Серия ещё не запущена"}
           </p>
           <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-white/50">
-            {nextStreak ? `До следующего milestone ещё ${nextStreak - dailyStreak} дн.` : "Ты уже на длинной серии. Не отпускай ритм."}
+            {nextStreak ? `До следующего рубежа ещё ${nextStreak - dailyStreak} дн.` : "Серия уже длинная. Не отпускай темп."}
           </p>
         </div>
       </div>
@@ -145,7 +145,7 @@ export default function ProfileRaceCard({ raceContext, weeklyTitles, auraPoints,
           >
             <p className="text-[10px] uppercase tracking-[0.08em] text-white/45">Выше тебя</p>
             <p className="truncate text-sm text-white/90">{my.above.displayName}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-white/45">{my.above.auraPoints} aura</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-white/45">{my.above.auraPoints} ауры</p>
           </Link>
         ) : (
           <div className="rounded-2xl border border-neon-green/30 bg-neon-green/10 px-3 py-2">
@@ -160,7 +160,7 @@ export default function ProfileRaceCard({ raceContext, weeklyTitles, auraPoints,
           >
             <p className="text-[10px] uppercase tracking-[0.08em] text-white/45">Ниже тебя</p>
             <p className="truncate text-sm text-white/90">{my.below.displayName}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-white/45">{my.below.auraPoints} aura</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-white/45">{my.below.auraPoints} ауры</p>
           </Link>
         ) : (
           <div className="rounded-2xl border border-white/15 bg-black/25 px-3 py-2">

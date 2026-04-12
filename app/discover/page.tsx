@@ -43,8 +43,8 @@ export default async function DiscoverPage() {
       <div className="smart-container px-6 pt-20">
         <header className="mb-8 pt-2">
           <div>
-            <h1 className="text-3xl font-black italic uppercase text-white tracking-tighter leading-[1.2]">Разведка профилей</h1>
-            <p className="text-[10px] uppercase tracking-[0.12em] text-white/45 mt-2">Кого смотреть и где двигать социальную активность</p>
+            <h1 className="text-3xl font-black italic uppercase text-white tracking-tighter leading-[1.2]">Разведка</h1>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-white/45 mt-2">Кого смотреть прямо сейчас и зачем</p>
           </div>
         </header>
 

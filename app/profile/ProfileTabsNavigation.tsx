@@ -53,15 +53,15 @@ function buildTabUrl(nextTab: ProfileTabKey): string {
 
 function HeavyTabLoading({ tab }: { tab: HeavyTabKey }) {
   const titleByTab: Record<HeavyTabKey, string> = {
-    progress: "Подгружаем прогресс",
-    circle: "Подгружаем круг и инвайты",
-    history: "Подгружаем историю активности",
+    progress: "Собираем маршрут",
+    circle: "Собираем круг",
+    history: "Собираем ленту",
   };
 
   const hintByTab: Record<HeavyTabKey, string> = {
-    progress: "Собираем гонку, пульс и ближайшие шаги.",
-    circle: "Собираем круг, статусы инвайтов и шеринговые поводы.",
-    history: "Собираем события, лидеров и историю транзакций.",
+    progress: "Подтягиваем гонку, динамику и следующие шаги.",
+    circle: "Подтягиваем людей, статусы инвайтов и поводы поделиться.",
+    history: "Подтягиваем уведомления, лидеров и историю ауры.",
   };
 
   return (

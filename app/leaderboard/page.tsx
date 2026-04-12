@@ -43,8 +43,8 @@ export default async function LeaderboardPage() {
       <div className="smart-container px-6 pt-20">
         <header className="mb-8 pt-2">
           <div>
-            <h1 className="text-3xl font-black italic uppercase text-white tracking-tighter leading-[1.2]">Гонка ауры</h1>
-            <p className="text-[10px] uppercase tracking-[0.12em] text-white/45 mt-2">Живая гонка ауры и роста</p>
+            <h1 className="text-3xl font-black italic uppercase text-white tracking-tighter leading-[1.2]">Лидерборд</h1>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-white/45 mt-2">Кто в топе, кто ускоряется, где ты</p>
           </div>
         </header>
 

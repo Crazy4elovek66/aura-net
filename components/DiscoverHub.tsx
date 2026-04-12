@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -111,8 +111,8 @@ export default function DiscoverHub() {
     return (
       <InlineStateCard
         eyebrow="Разведка"
-        title="Загружаем витрины"
-        description="Собираем ближайших соперников, личный круг и живые срезы по росту."
+        title="Собираем подборки"
+        description="Подтягиваем ближайших соперников, твой круг и активные профили за сутки."
       />
     );
   }
@@ -155,9 +155,9 @@ export default function DiscoverHub() {
     <div className="w-full space-y-5">
       {myCircle.length > 0 ? (
         <section className="w-full rounded-3xl border border-neon-green/25 bg-neon-green/[0.07] backdrop-blur-md p-5">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Мой круг</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Твой круг</p>
           <p className="mt-2 text-[11px] leading-relaxed text-white/55">
-            Здесь не весь мир, а люди, у которых уже есть реальная связь с твоей карточкой.
+            Люди, которые уже напрямую связаны с тобой: ты сам, приглашенные и тот, кто привел тебя.
           </p>
           <div className="mt-3 space-y-2">
             {myCircle.map((profile) =>
@@ -173,13 +173,13 @@ export default function DiscoverHub() {
 
       {aroundYou.length > 0 ? (
         <section className="w-full rounded-3xl border border-neon-purple/30 bg-neon-purple/10 backdrop-blur-md p-5">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Ближайшие соперники</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Рядом в гонке</p>
           <div className="mt-3 space-y-2">
             {aroundYou.map((profile) =>
               renderProfileRow(
                 profile,
                 profile.auraGap === null
-                  ? `Ранг #${profile.rank}`
+                  ? `ранг #${profile.rank}`
                   : profile.auraGap >= 0
                     ? `выше тебя на +${profile.auraGap}`
                     : `ниже тебя на ${Math.abs(profile.auraGap)}`,
@@ -191,13 +191,13 @@ export default function DiscoverHub() {
       ) : (
         <InlineStateCard
           eyebrow="Разведка"
-          title="Соседей по гонке пока нет"
-          description="Подборка вокруг твоей позиции появится, когда в системе наберётся больше активных профилей."
+          title="Пока нет соседей по гонке"
+          description="Подборка появится, когда в системе станет больше активных профилей."
         />
       )}
 
       <section className="w-full rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Почти новый tier</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Почти новый уровень</p>
         <div className="mt-3 space-y-2">
           {nearTier.length ? (
             nearTier.map((profile) =>
@@ -205,15 +205,15 @@ export default function DiscoverHub() {
             )
           ) : (
             <InlineStateCard
-              title="Пока нет явных кандидатов на новый tier"
-              description="Секция оживает, когда в таблице появляются профили у самой границы следующего статуса."
+              title="Сейчас нет явных кандидатов"
+              description="Секция оживает, когда профили подходят вплотную к следующему уровню."
             />
           )}
         </div>
       </section>
 
       <section className="w-full rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Кто на хайпе (24ч)</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">На хайпе за 24ч</p>
         <div className="mt-3 space-y-2">
           {hypeProfiles.length ? (
             hypeProfiles.map((profile) =>
@@ -225,24 +225,22 @@ export default function DiscoverHub() {
             )
           ) : (
             <InlineStateCard
-              title="Пока нет голосов за последние 24 часа"
-              description="Как только начнётся движение, здесь появятся самые обсуждаемые профили."
+              title="Пока тихо"
+              description="Как только начнется движение голосов, здесь появятся самые обсуждаемые профили."
             />
           )}
         </div>
       </section>
 
       <section className="w-full rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Рост за 24 часа</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Рост за 24ч</p>
         <div className="mt-3 space-y-2">
           {growth24h.length ? (
-            growth24h.map((profile) =>
-              renderProfileRow(profile, `#${profile.rank} · +${profile.growthPoints} ауры`, "text-neon-green"),
-            )
+            growth24h.map((profile) => renderProfileRow(profile, `#${profile.rank} · +${profile.growthPoints} ауры`, "text-neon-green"))
           ) : (
             <InlineStateCard
-              title="Рост за 24 часа пока пуст"
-              description="Лента заполнится, когда в системе накопится больше заметных изменений ауры."
+              title="Пока нет данных по росту"
+              description="Лента заполнится, когда накопятся заметные изменения ауры."
             />
           )}
         </div>
@@ -258,15 +256,13 @@ export default function DiscoverHub() {
           ) : (
             <InlineStateCard
               title="Новых профилей пока нет"
-              description="Когда пользователи начнут чаще заходить, здесь появится свежий поток регистраций."
+              description="Когда появятся новые регистрации, они отобразятся здесь."
             />
           )}
         </div>
       </section>
 
-      <p className="text-[10px] uppercase tracking-[0.08em] text-white/40">
-        Обновлено: {formatShortDate(payload.generatedAt)} UTC+0
-      </p>
+      <p className="text-[10px] uppercase tracking-[0.08em] text-white/40">Обновлено: {formatShortDate(payload.generatedAt)} UTC+0</p>
     </div>
   );
 }

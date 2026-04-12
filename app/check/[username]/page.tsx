@@ -1,4 +1,4 @@
-import AuraCard from "@/components/AuraCard";
+﻿import AuraCard from "@/components/AuraCard";
 import Background from "@/components/Background";
 import { VOTE_PAIR_COOLDOWN_HOURS } from "@/lib/economy";
 import { getProfileModerationState, isProfileLimited } from "@/lib/server/profile-moderation";
@@ -118,8 +118,8 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
             <CheckPageNav isAuthorized={isAuthorizedUser} backFallback={backFallback} />
           </div>
 
-          <h1 className="text-2xl font-bold mb-2 uppercase italic tracking-tighter">Чекаем вайб</h1>
-          <p className="text-white/40 text-[10px] font-black uppercase tracking-widest">В чьи-то руки попала власть... ⚡</p>
+          <h1 className="text-2xl font-bold mb-2 uppercase italic tracking-tighter">Проверка карточки</h1>
+          <p className="text-white/40 text-[10px] font-black uppercase tracking-widest">Оцени профиль и отдай голос</p>
         </header>
 
         <main className="flex flex-col items-center gap-10">
@@ -147,4 +147,3 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
     </div>
   );
 }
-

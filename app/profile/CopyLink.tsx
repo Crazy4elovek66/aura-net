@@ -22,9 +22,7 @@ export default function CopyLink({ link }: CopyLinkProps) {
 
   return (
     <div className="w-full max-w-sm relative mx-auto">
-      <h3 className="text-xs font-bold uppercase tracking-widest text-muted mb-4 px-1 text-center">
-        Твоя ссылка для голосования
-      </h3>
+      <h3 className="text-xs font-bold uppercase tracking-widest text-muted mb-4 px-1 text-center">Публичная ссылка</h3>
       
       <button
         onClick={handleCopy}
@@ -71,7 +69,7 @@ export default function CopyLink({ link }: CopyLinkProps) {
               exit={{ opacity: 0, y: 10, x: "-50%" }}
               className="absolute left-1/2 top-0 px-4 py-2 bg-neon-green text-black text-[10px] font-bold rounded-full shadow-[0_0_20px_rgba(57,255,20,0.5)] pointer-events-none whitespace-nowrap z-50"
             >
-              СКОПИРОВАНО! ⚡
+              СКОПИРОВАНО
             </motion.div>
           )}
         </AnimatePresence>

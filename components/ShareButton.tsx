@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { toBlob } from "html-to-image";
@@ -86,8 +86,8 @@ export default function ShareButton({ username }: { username: string }) {
       console.error("Capture Error:", err);
       notify({
         variant: "error",
-        title: "Карточка не собралась",
-        message: "Не удалось подготовить изображение. Попробуй ещё раз через пару секунд.",
+        title: "Карточка не собрана",
+        message: "Не удалось подготовить изображение. Попробуй еще раз через пару секунд.",
       });
     } finally {
       originalSrcs.forEach((src, img) => {
@@ -111,7 +111,7 @@ export default function ShareButton({ username }: { username: string }) {
         </button>
       </div>
       <p className="text-[9px] text-center mt-3 text-white/30 font-black uppercase tracking-widest hidden sm:block">
-        9:16 PNG • Чёткое качество
+        9:16 PNG • Четкое качество
       </p>
 
       {showResult && resultUrl && (
@@ -123,7 +123,7 @@ export default function ShareButton({ username }: { username: string }) {
 
           <div className="mt-8 text-center space-y-4 px-6">
             <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.3em] leading-relaxed animate-pulse">
-              Нажми на картинку и сохрани её в фото
+              Нажми на картинку и сохрани ее в фото
             </p>
 
             <button

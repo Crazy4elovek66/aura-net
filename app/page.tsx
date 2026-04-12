@@ -419,7 +419,7 @@ function LandingContent({
               transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
               className="w-2 h-2 rounded-full bg-neon-green shadow-[0_0_8px_rgba(57,255,20,0.8)]"
             />
-            Бета — раньше зашел, больше получил
+            Бета · ранний доступ
           </span>
         </motion.div>
 
@@ -443,7 +443,7 @@ function LandingContent({
         >
           Социальная игра статуса.{" "}
           <span className="text-foreground font-semibold">
-            Пусть друзья оценят твой вайб.
+            Покажи карточку и получи честную оценку.
           </span>
         </motion.p>
 
@@ -453,7 +453,7 @@ function LandingContent({
           transition={{ delay: 0.9 }}
           className="text-sm text-muted/60 mb-10"
         >
-          НПС 👻 → Герой 💜 → Сигма ⚡
+          НПС → Герой → Сигма
         </motion.p>
 
         {/* Кнопки действий */}
@@ -470,7 +470,7 @@ function LandingContent({
             transition={{ type: "spring", stiffness: 400, damping: 10 }}
             className="px-8 py-4 rounded-xl font-bold text-lg bg-neon-purple text-white border-2 border-neon-purple neon-glow-purple cursor-pointer transition-colors w-full sm:w-auto"
           >
-            ⚡ Узнай свою ауру
+            Открыть профиль
           </motion.button>
           </Link>
           <motion.button
@@ -480,7 +480,7 @@ function LandingContent({
             className="px-8 py-4 rounded-xl font-bold text-lg border-2 border-card-border text-muted hover:text-foreground hover:border-neon-purple/50 cursor-pointer transition-colors"
             onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
           >
-            Как это работает ↓
+            Как это работает
           </motion.button>
         </motion.div>
       </motion.section>
@@ -500,7 +500,7 @@ function LandingContent({
               <span className="text-neon-purple text-glow-purple">работает</span>
             </h2>
             <p className="text-muted max-w-md mx-auto text-sm">
-              Три шага, чтобы узнать — ты герой или просто НПС
+              Три шага, чтобы запустить карточку и начать рост
             </p>
           </motion.div>
 
@@ -561,9 +561,7 @@ function LandingContent({
               Тиры{" "}
               <span className="text-neon-green text-glow-green">ауры</span>
             </h2>
-            <p className="text-muted max-w-md mx-auto text-sm">
-              Твоя аура угасает на 3% каждые 24ч. Оставайся на виду или оставайся обычным НПС.
-            </p>
+            <p className="text-muted max-w-md mx-auto text-sm">Аура снижается на 3% каждые 24 часа. Важно держать внимание к карточке.</p>
           </motion.div>
 
           <div className="flex flex-col gap-6">
@@ -753,7 +751,7 @@ function LandingContent({
             ауру?
           </h2>
           <p className="text-muted text-lg mb-10 max-w-md mx-auto italic">
-            Хватит кэпить. Пусть другие решают.
+            Хватит гадать. Пусть оценка придет от людей.
           </p>
           <Link href={user ? "/profile" : "/login"}>
           <motion.button
@@ -762,7 +760,7 @@ function LandingContent({
             transition={{ type: "spring", stiffness: 400, damping: 10 }}
             className="px-10 py-5 rounded-xl font-bold text-xl bg-gradient-to-r from-neon-purple to-neon-pink text-white neon-glow-purple cursor-pointer"
           >
-            ⚡ Получить свою Ауру
+            Получить свою ауру
           </motion.button>
           </Link>
         </motion.div>
@@ -777,7 +775,7 @@ function LandingContent({
             {" "}© 2026
           </div>
           <div className="text-[10px] text-muted/50 uppercase tracking-widest">
-            Сделано на вайбах и нулевом бюджете 🫡
+            Нулевой бюджет · живой продукт
           </div>
         </div>
       </footer>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -24,7 +24,7 @@ const MOMENT_LABELS: Record<string, string> = {
   weekly_title_awarded: "Титул недели",
   streak_milestone: "Рубеж серии",
   leaderboard_top10_entered: "Вход в топ-10",
-  referral_activated: "Сработал инвайт",
+  referral_activated: "Активированный инвайт",
 };
 
 function asNumber(value: unknown) {
@@ -35,27 +35,29 @@ function getMomentHeadline(moment: ShareableMoment) {
   const payload = moment.payload || {};
 
   if (moment.moment_type === "achievement_unlocked") {
-    return typeof payload.achievementTitle === "string" ? payload.achievementTitle : "Новое достижение";
+    return typeof payload.achievementTitle === "string" ? payload.achievementTitle : "Открыто новое достижение";
   }
 
   if (moment.moment_type === "tier_reached") {
-    return typeof payload.tierLabel === "string" ? `Вышел в ${payload.tierLabel}` : "Открыл новый уровень";
+    return typeof payload.tierLabel === "string" ? `Вышел в ${payload.tierLabel}` : "Поднялся на новый уровень";
   }
 
   if (moment.moment_type === "weekly_title_awarded") {
-    return typeof payload.title === "string" ? payload.title : "Новый недельный титул";
+    return typeof payload.title === "string" ? payload.title : "Получен новый недельный титул";
   }
 
   if (moment.moment_type === "streak_milestone") {
-    return typeof payload.milestoneDays === "number" ? `${payload.milestoneDays} дней подряд` : "Новый этап серии";
+    return typeof payload.milestoneDays === "number" ? `${payload.milestoneDays} дней подряд` : "Взят новый рубеж серии";
   }
 
   if (moment.moment_type === "leaderboard_top10_entered") {
-    return typeof payload.rank === "number" ? `Теперь я в топ-${payload.rank}` : "Вошёл в топ-10";
+    return typeof payload.rank === "number" ? `Залетел в топ-${payload.rank}` : "Вошел в топ-10";
   }
 
   if (moment.moment_type === "referral_activated") {
-    return typeof payload.inviterReward === "number" ? `Инвайт дал +${payload.inviterReward} ауры` : "Приглашение активировано";
+    return typeof payload.inviterReward === "number"
+      ? `Инвайт сработал: +${payload.inviterReward} ауры`
+      : "Инвайт полностью активирован";
   }
 
   return "Есть повод показать карточку";
@@ -65,30 +67,30 @@ function getMomentReason(moment: ShareableMoment) {
   const payload = moment.payload || {};
 
   if (moment.moment_type === "achievement_unlocked") {
-    return "Публичное достижение проще воспринимается и чаще вызывает реакцию, чем абстрактный рост.";
+    return "Достижения проще объясняют рост, чем просто цифра в профиле.";
   }
 
   if (moment.moment_type === "tier_reached") {
-    return "Новый уровень заметно меняет статус карточки. Это хороший триггер для возврата аудитории.";
+    return "Новый уровень заметно меняет статус карточки и цепляет внимание.";
   }
 
   if (moment.moment_type === "weekly_title_awarded") {
-    return "Титул живёт ограниченное время, поэтому им лучше делиться сразу, пока он актуален.";
+    return "Титул живет недолго, поэтому им лучше делиться сразу.";
   }
 
   if (moment.moment_type === "streak_milestone") {
-    return `Серия в ${asNumber(payload.milestoneDays)} дней выглядит как дисциплина, а не случайный всплеск.`;
+    return `Серия ${asNumber(payload.milestoneDays)} дней выглядит как дисциплина, а не случайность.`;
   }
 
   if (moment.moment_type === "leaderboard_top10_entered") {
-    return "Попадание в топ-10 даёт сильный социальный повод вернуть людей к твоему профилю прямо сейчас.";
+    return "Вход в топ-10 дает сильный социальный повод вернуть людей в профиль.";
   }
 
   if (moment.moment_type === "referral_activated") {
-    return "Это сигнал, что твой круг растёт и механика приглашений работает на практике.";
+    return "Это сигнал, что твой круг реально растет и механика приглашений работает.";
   }
 
-  return "Карточка уже выглядит живой, осталось дать ей понятный публичный повод.";
+  return "Публичный повод, который можно быстро отправить в чат или сторис.";
 }
 
 function buildShareText(
@@ -99,7 +101,7 @@ function buildShareText(
   inviteLink: string | null,
 ) {
   const payload = moment.payload || {};
-  let opener = `У ${displayName} (@${username}) новый момент в Aura.net.`;
+  let opener = `${displayName} (@${username}) обновил карточку в Aura.net.`;
 
   if (moment.moment_type === "achievement_unlocked") {
     opener = `Открыл достижение «${typeof payload.achievementTitle === "string" ? payload.achievementTitle : "новый апдейт"}» в Aura.net.`;
@@ -112,13 +114,13 @@ function buildShareText(
   } else if (moment.moment_type === "leaderboard_top10_entered") {
     opener = `Залетел в топ-10 Aura.net${asNumber(payload.rank) > 0 ? ` на #${asNumber(payload.rank)}` : ""}.`;
   } else if (moment.moment_type === "referral_activated") {
-    opener = `Инвайт в Aura.net сработал: ещё один человек активировался, а карточка получила +${asNumber(payload.inviterReward)} ауры.`;
+    opener = `Инвайт в Aura.net сработал: новый человек активирован, карточка получила +${asNumber(payload.inviterReward)} ауры.`;
   }
 
   return [
     opener,
-    `Проверь мою карточку: ${profileShareLink}`,
-    inviteLink ? `Если хочешь зайти в игру сразу по приглашению: ${inviteLink}` : null,
+    `Моя карточка: ${profileShareLink}`,
+    inviteLink ? `Хочешь зайти сразу по инвайту: ${inviteLink}` : null,
   ]
     .filter(Boolean)
     .join("\n");
@@ -172,7 +174,7 @@ export default function ShareableMomentsCard({
     } catch (error) {
       console.error("[ShareableMomentsCard] Failed to copy share text", error);
       setCopiedMomentId(null);
-      setCopyError("Не удалось скопировать текст автоматически. Скопируй его вручную по карточке момента.");
+      setCopyError("Не получилось скопировать автоматически. Скопируй текст вручную.");
     }
   };
 
@@ -183,9 +185,9 @@ export default function ShareableMomentsCard({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Поделиться моментом</h2>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Поводы поделиться</h2>
           <p className="mt-2 text-[11px] leading-relaxed text-white/55">
-            Понятная цель: дать людям конкретный апдейт, вернуть их к карточке и при желании сразу приложить инвайт.
+            Готовые поводы, чтобы быстро рассказать о росте, вернуть внимание к карточке и при желании добавить инвайт.
           </p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right">
@@ -195,16 +197,16 @@ export default function ShareableMomentsCard({
       </div>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-3">
-        <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 text-[10px] text-white/65">Показываешь реальный апдейт</div>
-        <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 text-[10px] text-white/65">Возвращаешь внимание к профилю</div>
-        <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 text-[10px] text-white/65">Двигаешь инвайты и круг</div>
+        <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 text-[10px] text-white/65">Показываешь конкретный апдейт</div>
+        <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 text-[10px] text-white/65">Возвращаешь людей к профилю</div>
+        <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 text-[10px] text-white/65">Усиливаешь инвайты и круг</div>
       </div>
 
       {featuredMoment ? (
         <div className="mt-4 rounded-[1.5rem] border border-neon-purple/25 bg-neon-purple/[0.08] p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[9px] font-black uppercase tracking-[0.14em] text-neon-purple/90">Рекомендуемый момент</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.14em] text-neon-purple/90">Рекомендованный повод</p>
               <p className="mt-2 text-sm font-black text-white">
                 {MOMENT_LABELS[featuredMoment.moment_type] || featuredMoment.moment_type}
               </p>
@@ -241,8 +243,8 @@ export default function ShareableMomentsCard({
         </div>
       ) : (
         <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-[11px] leading-relaxed text-white/58">
-          Пока без свежих моментов. Они появятся после достижений, недельных титулов, входа в топ-10, рубежей серии и
-          активации инвайтов.
+          Пока нет свежих поводов. Они появятся после достижений, титулов недели, рубежей серии, входа в топ-10 и
+          активаций инвайтов.
         </p>
       )}
 
@@ -255,7 +257,7 @@ export default function ShareableMomentsCard({
       {moments.length > 1 ? (
         <details className="group mt-3 rounded-2xl border border-white/10 bg-white/[0.02]">
           <summary className="list-none cursor-pointer px-4 py-3">
-            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/70">Ещё моменты ({moments.length - 1})</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/70">Еще поводы ({moments.length - 1})</p>
           </summary>
           <div className="space-y-2 px-3 pb-3">
             {moments.slice(1).map((moment) => (

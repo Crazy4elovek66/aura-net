@@ -174,11 +174,11 @@ export default function LeaderboardPreview({
       </div>
 
       <div className="mt-4 flex justify-end">
-        <Link
+          <Link
           href="/leaderboard"
           className="rounded-xl border border-neon-purple/35 bg-neon-purple/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-neon-purple hover:bg-neon-purple/15 transition-colors"
         >
-          Открыть полную гонку
+          Вся таблица
         </Link>
       </div>
     </section>

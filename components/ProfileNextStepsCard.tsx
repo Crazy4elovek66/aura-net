@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 
@@ -48,50 +48,48 @@ export default function ProfileNextStepsCard({
   if (!claimedToday) {
     steps.push({
       id: "daily",
-      eyebrow: "Серия",
-      title: dailyStreak > 0 ? "Забери награду дня и не роняй темп" : "Запусти первую серию входов",
+      eyebrow: "Награда дня",
+      title: dailyStreak > 0 ? "Забери награду и не роняй серию" : "Запусти первую серию входов",
       description:
         dailyStreak > 0
-          ? `Следующий вход продлит серию и приблизит ближайший рубеж. Сейчас у тебя ${dailyStreak} дн. подряд.`
-          : "Первый ежедневный вход сразу запускает ритм: серия, недельный прогресс и новые поводы для публикаций.",
+          ? `Сейчас у тебя ${dailyStreak} дн. подряд. Один вход продлит серию и приблизит следующий рубеж.`
+          : "Первый вход сразу запускает серию, недельную цель и новые поводы для шеринга.",
       href: "/profile?tab=profile#daily-reward-card",
-      action: "Забрать награду",
+      action: "Забрать",
     });
   }
 
   if (votesCast <= 0) {
     steps.push({
       id: "discover",
-      eyebrow: "Живой сигнал",
-      title: "Сделай первый ход в разведке",
-      description:
-        "Один реальный голос быстрее всего превращает профиль из пустого слота в живую карточку и запускает доверие внутри продукта.",
+      eyebrow: "Соцсигнал",
+      title: "Сделай первый ход в Разведке",
+      description: "Один живой голос превращает профиль из пустого слота в активную карточку.",
       href: "/discover",
-      action: "Открыть разведку",
+      action: "Открыть Разведку",
     });
   }
 
   if (activatedInvites <= 0) {
     steps.push({
       id: "invite",
-      eyebrow: "Инвайт-петля",
-      title: pendingInvites > 0 ? "Дожми один инвайт до активации" : "Отправь первый инвайт",
+      eyebrow: "Инвайты",
+      title: pendingInvites > 0 ? "Дожми текущие инвайты" : "Отправь первый инвайт",
       description:
         pendingInvites > 0
-          ? "Друг уже вошёл в петлю. Теперь ему нужен первый ежедневный вход, а после него любое живое действие."
-          : "Личный инвайт запускает возвратный цикл: зовёшь человека, видишь его прогресс и возвращаешься проверить активацию.",
+          ? "Люди уже зашли по ссылке. Дальше им нужен первый вход и любое действие в карточке."
+          : "Инвайт запускает рост круга и дает прозрачный путь к бонусам.",
       href: "/profile?tab=circle#invite-loop-card",
-      action: pendingInvites > 0 ? "Открыть петлю" : "Позвать друга",
+      action: pendingInvites > 0 ? "Открыть инвайты" : "Позвать",
     });
   }
 
   if (nextTier) {
     steps.push({
       id: "tier",
-      eyebrow: "Следующий уровень",
-      title: `Ещё ${nextTier.threshold - auraPoints} до ${nextTier.label}`,
-      description:
-        "Чем яснее ближайший порог, тем легче чувствовать рост. Здесь важен не абстрактный гринд, а короткая достижимая цель.",
+      eyebrow: "Уровень",
+      title: `Еще ${nextTier.threshold - auraPoints} до ${nextTier.label}`,
+      description: "Короткая цель вместо бесконечного гринда: видишь порог, бьешь в него, двигаешься дальше.",
       href: "/profile?tab=progress#profile-race-card",
       action: "Смотреть прогресс",
     });
@@ -100,10 +98,10 @@ export default function ProfileNextStepsCard({
   if (steps.length < 3) {
     steps.push({
       id: "share",
-      eyebrow: "Публикация",
+      eyebrow: "Шеринг",
       title: "Держи карточку и ссылку под рукой",
       description: inviteLink
-        ? "Карточка даёт понятный повод рассказать о себе, а инвайт закрывает следующий шаг для нового человека."
+        ? "Карточка дает контекст, инвайт закрывает следующий шаг для нового человека."
         : `Публичная ссылка уже готова: ${profileShareLink}`,
       href: "/profile?tab=circle#shareable-moments-card",
       action: "Открыть поводы",
@@ -117,9 +115,9 @@ export default function ProfileNextStepsCard({
     <section className="w-full max-w-xl rounded-3xl border border-neon-green/25 bg-neon-green/[0.07] p-5 backdrop-blur-md">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-neon-green/90">Следующий ход</h2>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-neon-green/90">Что делать дальше</h2>
           <p className="mt-2 text-[11px] leading-relaxed text-white/70">
-            Короткая подсказка без длинного туториала: сначала главный шаг, затем дополнительные ходы по запросу.
+            Один главный шаг и еще пара запасных. Без длинных гайдов и лишнего текста.
           </p>
         </div>
         <div className="rounded-2xl border border-neon-green/25 bg-black/20 px-3 py-2 text-right">
@@ -149,9 +147,7 @@ export default function ProfileNextStepsCard({
       {secondarySteps.length ? (
         <details className="group mt-3 rounded-2xl border border-white/10 bg-black/20">
           <summary className="list-none cursor-pointer px-4 py-3">
-            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/70">
-              Ещё {secondarySteps.length} подсказки
-            </p>
+            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/70">Еще {secondarySteps.length} шага</p>
           </summary>
           <div className="space-y-2 px-3 pb-3">
             {secondarySteps.map((step, index) => (

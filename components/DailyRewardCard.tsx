@@ -153,14 +153,14 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
     <section id="daily-reward-card" className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Ежедневная награда</h2>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Награда дня</h2>
           <p className="text-[11px] text-white/45 mt-1 uppercase tracking-[0.08em]">Серия: {state.streak} дн.</p>
           <p className="text-[10px] text-white/50 mt-1 uppercase tracking-[0.08em]">
             Следующий рубеж: {nextMilestone} дн. {toNextMilestone > 0 ? `(+${toNextMilestone})` : "достигнут"}
           </p>
         </div>
         <div className="text-right">
-          <p className="text-[10px] uppercase tracking-[0.12em] text-white/40">Следующая награда</p>
+          <p className="text-[10px] uppercase tracking-[0.12em] text-white/40">Следующий бонус</p>
           <p className="text-sm font-black text-neon-green">
             +{state.nextReward} {capReached ? "макс" : ""}
           </p>
@@ -170,18 +170,18 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
       <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
         <p className="text-[11px] text-white/75">
           {state.canClaim
-            ? `Сейчас можно забрать +${state.rewardToday} ауры`
-            : `Следующая выдача: ${formatDate(state.availableAt)} (UTC+0)`}
+            ? `Можно забрать +${state.rewardToday} ауры`
+            : `Забрать снова: ${formatDate(state.availableAt)} (UTC+0)`}
         </p>
 
         {state.streakWillReset && state.canClaim && (
           <p className="mt-2 text-[10px] text-neon-pink/90 uppercase tracking-[0.08em]">
-            Серия прервана. После получения начнется с первого дня.
+            Серия сбилась. После получения старт пойдет с 1 дня.
           </p>
         )}
 
         <div className="mt-3 rounded-xl border border-white/10 bg-black/25 p-3">
-          <p className="text-[10px] uppercase tracking-[0.1em] text-white/50">Этапы серии</p>
+          <p className="text-[10px] uppercase tracking-[0.1em] text-white/50">Рубежи серии</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {STREAK_MILESTONES.map((milestone) => {
               const reached = state.streak >= milestone;
@@ -208,7 +208,7 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
 
         <div className="mt-3 rounded-xl border border-white/10 bg-black/25 p-3">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] uppercase tracking-[0.1em] text-white/50">Недельный цикл</p>
+            <p className="text-[10px] uppercase tracking-[0.1em] text-white/50">Недельная цель</p>
             <p className="text-[10px] font-black uppercase tracking-[0.1em] text-neon-pink">
               {weeklyProgress}/{weeklyTarget}
             </p>
@@ -218,19 +218,19 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
           </div>
           <p className="mt-2 text-[10px] uppercase tracking-[0.08em] text-white/50">
             {weeklyProgress >= weeklyTarget
-              ? "Недельная цель закрыта. Забирай награду серии ежедневно."
-              : `До недельного бонуса: ещё ${weeklyTarget - weeklyProgress} дней входа.`}
+              ? "Цель недели закрыта. Держи ритм и забирай награду каждый день."
+              : `До бонуса недели: ещё ${weeklyTarget - weeklyProgress} дней.`}
           </p>
         </div>
 
         {lastClaim && (
           <div className="mt-2 space-y-1">
-            <p className="text-[10px] text-neon-green uppercase tracking-[0.08em]">Получено: +{lastClaim.total} ауры</p>
+            <p className="text-[10px] text-neon-green uppercase tracking-[0.08em]">Зачислено: +{lastClaim.total} ауры</p>
             {lastClaim.bonus > 0 && (
-              <p className="text-[10px] text-white/75 uppercase tracking-[0.08em]">Бонусы активности: +{lastClaim.bonus}</p>
+              <p className="text-[10px] text-white/75 uppercase tracking-[0.08em]">Бонус активности: +{lastClaim.bonus}</p>
             )}
             {lastClaim.streakMilestone > 0 && (
-              <p className="text-[10px] text-white/60 uppercase tracking-[0.08em]">Этап серии: +{lastClaim.streakMilestone}</p>
+              <p className="text-[10px] text-white/60 uppercase tracking-[0.08em]">Рубеж серии: +{lastClaim.streakMilestone}</p>
             )}
             {lastClaim.weeklyActivity > 0 && (
               <p className="text-[10px] text-white/60 uppercase tracking-[0.08em]">Недельная активность: +{lastClaim.weeklyActivity}</p>
@@ -260,7 +260,7 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
             loading ? "cursor-wait" : "",
           ].join(" ")}
         >
-          {loading ? "Начисляем..." : state.canClaim ? `Забрать +${state.rewardToday} ауры` : "Получено сегодня"}
+          {loading ? "Начисляем..." : state.canClaim ? `Забрать +${state.rewardToday}` : "Уже получено"}
         </button>
       </div>
     </section>

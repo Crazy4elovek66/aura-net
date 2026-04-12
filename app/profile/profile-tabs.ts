@@ -2,27 +2,27 @@ export const PROFILE_TAB_ITEMS = [
   {
     key: "profile",
     label: "Профиль",
-    description: "Статус и базовые действия",
+    description: "Карточка, награда дня и быстрые действия",
   },
   {
     key: "progress",
-    label: "Прогресс",
-    description: "Гонка, цели и динамика",
+    label: "Маршрут",
+    description: "Куда расти и что сделать следующим",
   },
   {
     key: "circle",
     label: "Круг",
-    description: "Люди, инвайты и шэринг",
+    description: "Друзья, инвайты и поводы поделиться",
   },
   {
     key: "history",
-    label: "Активность",
-    description: "История и события",
+    label: "Лента",
+    description: "Уведомления, лидеры и история ауры",
   },
   {
     key: "shop",
-    label: "Магазин",
-    description: "Траты и эффекты",
+    label: "Эффекты",
+    description: "Полезные траты ауры с таймерами",
   },
 ] as const;
 

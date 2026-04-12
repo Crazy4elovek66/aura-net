@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -45,11 +45,8 @@ export default function SetupProfilePage() {
   };
 
   const getErrorMessage = (errorValue: unknown) =>
-    errorValue instanceof Error
-      ? errorValue.message
-      : "Ошибка базы данных. Проверь SQL-триггеры!";
+    errorValue instanceof Error ? errorValue.message : "Ошибка базы данных. Проверь SQL-триггеры.";
 
-  // Валидация ника (Кириллица, Латиница, Цифры, Подчеркивание)
   const validateUsername = (val: string) => {
     const regex = /^[a-zA-Z0-9а-яА-ЯёЁ_]{3,20}$/;
     return regex.test(val);
@@ -77,7 +74,7 @@ export default function SetupProfilePage() {
 
       if (!validateUsername(username)) {
         setStatus("invalid");
-        setError("Только буквы, цифры и подчеркивание (_) — без пробелов!");
+        setError("Только буквы, цифры и подчеркивание (_) — без пробелов");
         return;
       }
 
@@ -85,13 +82,13 @@ export default function SetupProfilePage() {
       try {
         const res = await fetch(`/api/check-username?username=${encodeURIComponent(username)}`);
         const data = await res.json();
-        
+
         if (data.available) {
           setStatus("available");
           setError("");
         } else {
           setStatus("taken");
-          setError("Этот ник уже занят другим героем");
+          setError("Этот ник уже занят");
         }
       } catch (err) {
         console.error(err);
@@ -126,20 +123,17 @@ export default function SetupProfilePage() {
 
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({ 
+        .update({
           username: username.trim(),
-          display_name: username.trim(), // Синхронизируем display_name
-          is_nickname_selected: true 
+          display_name: username.trim(),
+          is_nickname_selected: true,
         })
         .eq("id", user.id);
 
       if (updateError) throw updateError;
 
-      // Даем базе полсекунды на "прогрев" и сбрасываем кэш роутера
       router.refresh();
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Жесткий редирект
+      await new Promise((resolve) => setTimeout(resolve, 500));
       window.location.replace("/profile");
     } catch (err: unknown) {
       setError(getErrorMessage(err));
@@ -151,7 +145,6 @@ export default function SetupProfilePage() {
 
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4 font-unbounded overflow-hidden">
-      {/* Background Decor */}
       <div className="fixed inset-0 pointer-events-none opacity-30">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-neon-purple/20 rounded-full blur-[120px]" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-neon-pink/20 rounded-full blur-[120px]" />
@@ -168,14 +161,12 @@ export default function SetupProfilePage() {
             animate={{ y: 0 }}
             className="inline-block p-4 rounded-2xl bg-gradient-to-br from-neon-purple/20 to-neon-pink/20 border border-white/10 mb-6"
           >
-            <span className="text-4xl">🎭</span>
+            <span className="text-4xl">ID</span>
           </motion.div>
           <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-neon-purple to-neon-pink">
-            ФИНАЛЬНЫЙ ШТРИХ
+            ВЫБЕРИ НИК
           </h1>
-          <p className="text-muted text-sm mt-3 uppercase tracking-widest">
-            ВЫБЕРИ СВОЁ ИМЯ В СИСТЕМЕ
-          </p>
+          <p className="text-muted text-sm mt-3 uppercase tracking-widest">ЭТО ИМЯ БУДУТ ВИДЕТЬ В КАРТОЧКЕ</p>
         </div>
 
         <form onSubmit={handleSave} className="space-y-6">
@@ -184,15 +175,17 @@ export default function SetupProfilePage() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Твой никнейм..."
+              placeholder="Например: aura_neo"
               className={`w-full bg-black/50 border-2 p-5 rounded-2xl text-lg transition-all outline-none ${
-                status === "available" ? "border-neon-green text-neon-green" :
-                status === "taken" || status === "invalid" ? "border-neon-pink text-neon-pink" :
-                "border-card-border focus:border-neon-purple"
+                status === "available"
+                  ? "border-neon-green text-neon-green"
+                  : status === "taken" || status === "invalid"
+                    ? "border-neon-pink text-neon-pink"
+                    : "border-card-border focus:border-neon-purple"
               }`}
               required
             />
-            
+
             <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
               <AnimatePresence mode="wait">
                 {status === "checking" && (
@@ -234,12 +227,12 @@ export default function SetupProfilePage() {
             type="submit"
             disabled={status !== "available" || loading}
             className={`w-full py-5 rounded-2xl font-bold transition-all relative overflow-hidden group ${
-              status === "available" 
-                ? "bg-white text-black hover:scale-[1.02] shadow-[0_0_20px_rgba(255,255,255,0.3)]" 
+              status === "available"
+                ? "bg-white text-black hover:scale-[1.02] shadow-[0_0_20px_rgba(255,255,255,0.3)]"
                 : "bg-card-border text-muted cursor-not-allowed"
             }`}
           >
-            {loading ? "СОХРАНЯЕМ..." : "СТАТЬ ГЕРОЕМ 🏎️"}
+            {loading ? "СОХРАНЯЕМ..." : "СОХРАНИТЬ НИК"}
             {status === "available" && (
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
             )}
@@ -248,16 +241,16 @@ export default function SetupProfilePage() {
 
         <div className="mt-8 flex flex-col items-center gap-4">
           <p className="text-center text-[10px] text-muted uppercase tracking-[0.2em] leading-relaxed">
-            После этого ты получишь свою уникальную карточку <br /> и сможешь начать копить ауру
+            После этого откроется твой профиль и публичная ссылка
           </p>
-          
+
           <div className="w-full rounded-3xl border border-white/10 bg-black/35 p-5 text-left">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neon-green/85">Что дальше</p>
             <div className="mt-3 space-y-2">
               {[
-                "1. Получишь свою карточку и публичную ссылку.",
-                "2. Сразу увидишь следующий ориентир роста: серия, уровень и место в гонке.",
-                "3. Сможешь отправить карточку или инвайт без лишнего онбординга.",
+                "1. Получишь личную карточку и ссылку.",
+                "2. Увидишь ближайшие шаги роста.",
+                "3. Сможешь сразу отправить карточку или инвайт.",
               ].map((step) => (
                 <p key={step} className="rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2 text-[11px] leading-relaxed text-white/68">
                   {step}
@@ -273,7 +266,7 @@ export default function SetupProfilePage() {
             }}
             className="text-[10px] font-bold text-muted hover:text-neon-pink transition-colors uppercase tracking-widest border-b border-muted/50 hover:border-neon-pink/50 pb-1"
           >
-            Выйти из системы
+            Выйти
           </button>
         </div>
       </motion.div>

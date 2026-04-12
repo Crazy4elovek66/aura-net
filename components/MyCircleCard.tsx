@@ -39,14 +39,13 @@ export default function MyCircleCard({ circleProfiles, activatedInvites, pending
     <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-5 backdrop-blur-md">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Мой круг</h2>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Твой круг</h2>
           <p className="mt-2 text-[11px] leading-relaxed text-white/55">
-            Не весь рынок сразу. Здесь те, кто уже реально связан с твоим профилем: ты, приглашённые люди и тот, кто
-            завёл тебя в Aura.net.
+            Здесь только те, кто реально связан с тобой: ты, приглашенные и тот, кто тебя привел.
           </p>
         </div>
         <div className="rounded-2xl border border-neon-purple/20 bg-neon-purple/[0.06] px-3 py-2 text-right">
-          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Живых связей</p>
+          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Связей</p>
           <p className="text-sm font-black text-neon-purple">{circleProfiles.length}</p>
         </div>
       </div>
@@ -57,7 +56,7 @@ export default function MyCircleCard({ circleProfiles, activatedInvites, pending
           <p className="mt-2 text-lg font-black text-neon-green">{activatedInvites}</p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Ждут движения</p>
+          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Ждут шага</p>
           <p className="mt-2 text-lg font-black text-neon-pink">{pendingInvites}</p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
