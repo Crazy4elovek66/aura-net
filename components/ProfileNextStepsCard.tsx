@@ -52,7 +52,7 @@ export default function ProfileNextStepsCard({
         dailyStreak > 0
           ? `Следующий вход продлит серию и приблизит ближайший рубеж. Сейчас у тебя ${dailyStreak} дн. подряд.`
           : "Первый ежедневный вход сразу запускает ритм: серия, недельный прогресс и новые поводы для публикаций.",
-      href: "#daily-reward-card",
+      href: "/profile?tab=profile#daily-reward-card",
       action: "Забрать награду",
     });
   }
@@ -78,7 +78,7 @@ export default function ProfileNextStepsCard({
         pendingInvites > 0
           ? "Друг уже вошёл в петлю. Теперь ему нужен первый ежедневный вход, а после него любое живое действие."
           : "Личный инвайт запускает возвратный цикл: зовёшь человека, видишь его прогресс и возвращаешься проверить активацию.",
-      href: "#invite-loop-card",
+      href: "/profile?tab=circle#invite-loop-card",
       action: pendingInvites > 0 ? "Открыть петлю" : "Позвать друга",
     });
   }
@@ -90,7 +90,7 @@ export default function ProfileNextStepsCard({
       title: `Ещё ${nextTier.threshold - auraPoints} до ${nextTier.label}`,
       description:
         "Чем яснее ближайший порог, тем легче чувствовать рост. Здесь важен не абстрактный гринд, а короткая достижимая цель.",
-      href: "#profile-race-card",
+      href: "/profile?tab=progress#profile-race-card",
       action: "Смотреть прогресс",
     });
   }
@@ -103,7 +103,7 @@ export default function ProfileNextStepsCard({
       description: inviteLink
         ? "Карточка даёт понятный повод рассказать о себе, а инвайт закрывает следующий шаг для нового человека."
         : `Публичная ссылка уже готова: ${profileShareLink}`,
-      href: "#shareable-moments-card",
+      href: "/profile?tab=circle#shareable-moments-card",
       action: "Открыть поводы",
     });
   }

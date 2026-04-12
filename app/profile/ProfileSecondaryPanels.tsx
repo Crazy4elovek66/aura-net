@@ -9,6 +9,7 @@ import ShareButton from "@/components/ShareButton";
 import ShareableMomentsCard from "@/components/ShareableMomentsCard";
 import { createClient } from "@/lib/supabase/server";
 import CopyLink from "./CopyLink";
+import type { ProfileTabKey } from "./profile-tabs";
 
 interface GrowthLeaderRow {
   user_id: string;
@@ -108,6 +109,7 @@ function asNumber(value: number | string | null | undefined): number {
 }
 
 export default async function ProfileSecondaryPanels({
+  activeTab,
   userId,
   auraPoints,
   dailyStreak,
@@ -120,6 +122,7 @@ export default async function ProfileSecondaryPanels({
   telegramInviteLink,
   referrals,
 }: {
+  activeTab: Extract<ProfileTabKey, "progress" | "circle" | "history">;
   userId: string;
   auraPoints: number;
   dailyStreak: number;
@@ -133,30 +136,194 @@ export default async function ProfileSecondaryPanels({
   referrals: ReferralEntry[];
 }) {
   const supabase = await createClient();
-  const nowIso = new Date().toISOString();
 
-  const [
-    spotlightResult,
-    auraLeadersResult,
-    growthLeadersResult,
-    transactionsResult,
-    reengagementEventsResult,
-    shareableMomentsResult,
-    raceContextResult,
-    weeklyTitlesResult,
-    presenceStateResult,
-  ] = await Promise.all([
+  if (activeTab === "progress") {
+    const [raceContextResult, weeklyTitlesResult, presenceStateResult] = await Promise.all([
+      supabase.rpc("get_profile_leaderboard_context", { p_profile_id: userId, p_top_target: 10 }).maybeSingle(),
+      supabase.rpc("get_active_weekly_titles", { p_limit: 12 }),
+      supabase.from("leaderboard_presence_states").select("last_rank, updated_at").eq("profile_id", userId).maybeSingle(),
+    ]);
+
+    if (raceContextResult.error) {
+      console.error("[Profile Page] Failed to load race context", raceContextResult.error.message);
+    }
+    if (weeklyTitlesResult.error) {
+      console.error("[Profile Page] Failed to load weekly titles", weeklyTitlesResult.error.message);
+    }
+
+    const raceContextRaw = (raceContextResult.data || null) as ProfileLeaderboardContextRow | null;
+    const raceContext = raceContextRaw
+      ? {
+          profileId: raceContextRaw.profile_id,
+          rank: asNumber(raceContextRaw.rank_position),
+          distanceToNext: asNumber(raceContextRaw.distance_to_next),
+          distanceToTop10: asNumber(raceContextRaw.distance_to_top_target),
+          above: raceContextRaw.above_profile_id
+            ? {
+                id: raceContextRaw.above_profile_id,
+                username: raceContextRaw.above_username || "",
+                displayName: raceContextRaw.above_display_name || raceContextRaw.above_username || "",
+                auraPoints: asNumber(raceContextRaw.above_aura_points),
+              }
+            : null,
+          below: raceContextRaw.below_profile_id
+            ? {
+                id: raceContextRaw.below_profile_id,
+                username: raceContextRaw.below_username || "",
+                displayName: raceContextRaw.below_display_name || raceContextRaw.below_username || "",
+                auraPoints: asNumber(raceContextRaw.below_aura_points),
+              }
+            : null,
+        }
+      : null;
+
+    const weeklyTitles = ((weeklyTitlesResult.data as WeeklyTitleRow[] | null) || [])
+      .filter((row) => row.profile_id === userId)
+      .map((row) => ({
+        key: row.title_key,
+        title: WEEKLY_TITLE_LABELS[row.title_key] || row.title,
+      }));
+
+    const presenceState = (presenceStateResult.data as PresenceStateRow | null) || null;
+    const trackedAt = presenceState?.updated_at ?? null;
+    const trackedSinceDate = trackedAt ?? null;
+    const [transactionsSinceTrackedResult, achievementsSinceTrackedResult, momentsSinceTrackedResult, pendingEventsResult] =
+      trackedSinceDate
+        ? await Promise.all([
+            supabase.from("transactions").select("amount").eq("user_id", userId).gt("created_at", trackedSinceDate),
+            supabase
+              .from("user_achievements")
+              .select("achievement_key", { count: "exact", head: true })
+              .eq("user_id", userId)
+              .gt("unlocked_at", trackedSinceDate),
+            supabase
+              .from("shareable_moments")
+              .select("id", { count: "exact", head: true })
+              .eq("profile_id", userId)
+              .gt("created_at", trackedSinceDate),
+            supabase
+              .from("notification_events")
+              .select("id", { count: "exact", head: true })
+              .eq("profile_id", userId)
+              .in("status", ["pending", "processing"]),
+          ])
+        : [{ data: [] as Array<{ amount: number }> }, { count: 0 }, { count: 0 }, { count: 0 }];
+
+    const auraDeltaSinceTracked = trackedSinceDate
+      ? (((transactionsSinceTrackedResult.data as Array<{ amount: number }> | null) || []) as Array<{ amount: number }>).reduce(
+          (sum, row) => sum + Number(row.amount || 0),
+          0,
+        )
+      : 0;
+    const newMomentsSinceTracked = trackedSinceDate ? Number(momentsSinceTrackedResult.count || 0) : 0;
+    const pendingEvents = trackedSinceDate ? Number(pendingEventsResult.count || 0) : 0;
+    const newAchievementsSinceTracked = trackedSinceDate ? Number(achievementsSinceTrackedResult.count || 0) : 0;
+    const activatedReferralsSinceTracked = trackedSinceDate
+      ? referrals.filter((entry) => entry.activatedAt && entry.activatedAt > trackedSinceDate).length
+      : 0;
+
+    return (
+      <>
+        <ProfileRaceCard raceContext={raceContext} weeklyTitles={weeklyTitles} auraPoints={auraPoints} dailyStreak={dailyStreak} />
+
+        <ReturnPulseCard
+          trackedAt={trackedAt}
+          currentRank={raceContext?.rank ?? null}
+          previousRank={presenceState?.last_rank ?? null}
+          auraDelta={auraDeltaSinceTracked}
+          newAchievements={newAchievementsSinceTracked}
+          newMoments={newMomentsSinceTracked}
+          activatedReferrals={activatedReferralsSinceTracked}
+          pendingEvents={pendingEvents}
+        />
+      </>
+    );
+  }
+
+  if (activeTab === "circle") {
+    const shareableMomentsResult = await supabase
+      .from("shareable_moments")
+      .select("id, moment_type, payload, created_at")
+      .eq("profile_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(6);
+
+    const circleIds = Array.from(
+      new Set([userId, ...(referredById ? [referredById] : []), ...referrals.map((entry) => entry.inviteeId)]),
+    );
+    const circleProfilesResult = circleIds.length
+      ? await supabase.from("profiles").select("id, username, display_name, aura_points").in("id", circleIds)
+      : { data: [] as CircleProfileRow[] };
+
+    const circleProfiles = ((circleProfilesResult.data as CircleProfileRow[] | null) || [])
+      .map((row) => {
+        let relation: "you" | "invited" | "invited_you" = "invited";
+        let relationLabel = "твой человек";
+
+        if (row.id === userId) {
+          relation = "you";
+          relationLabel = "это ты";
+        } else if (referredById && row.id === referredById) {
+          relation = "invited_you";
+          relationLabel = "пригласил тебя";
+        } else {
+          const referral = referrals.find((entry) => entry.inviteeId === row.id);
+          relationLabel =
+            referral?.status === "activated"
+              ? "ты пригласил, петля уже закрылась"
+              : referral?.hasFirstClaim
+                ? "ты пригласил, ждём активность"
+                : "ты пригласил, ждём первый вход";
+        }
+
+        return {
+          id: row.id,
+          username: row.username,
+          displayName: row.display_name || row.username,
+          auraPoints: Number(row.aura_points || 0),
+          relation,
+          relationLabel,
+        };
+      })
+      .sort((left, right) => right.auraPoints - left.auraPoints)
+      .slice(0, 6);
+
+    const activatedInvites = referrals.filter((entry) => entry.status === "activated").length;
+    const pendingInvites = referrals.filter((entry) => entry.status === "pending").length;
+
+    return (
+      <>
+        <MyCircleCard circleProfiles={circleProfiles} activatedInvites={activatedInvites} pendingInvites={pendingInvites} />
+        <InviteLoopCard
+          inviteCode={inviteCode}
+          webInviteLink={inviteLink}
+          telegramInviteLink={telegramInviteLink}
+          referrals={referrals}
+        />
+        <ShareableMomentsCard
+          moments={(shareableMomentsResult.data as ShareableMomentRow[] | null) || []}
+          username={profileUsername}
+          displayName={displayName}
+          profileShareLink={profileShareLink}
+          inviteLink={inviteLink}
+        />
+        <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/20 p-4">
+          <CopyLink link={profileShareLink} />
+          <ShareButton username={profileUsername} />
+        </div>
+      </>
+    );
+  }
+
+  const nowIso = new Date().toISOString();
+  const [spotlightResult, auraLeadersResult, growthLeadersResult, transactionsResult, reengagementEventsResult] = await Promise.all([
     supabase
       .from("boosts")
       .select("profile_id, expires_at")
       .gt("expires_at", nowIso)
       .order("expires_at", { ascending: false })
       .limit(5),
-    supabase
-      .from("profiles")
-      .select("id, username, display_name, aura_points")
-      .order("aura_points", { ascending: false })
-      .limit(5),
+    supabase.from("profiles").select("id, username, display_name, aura_points").order("aura_points", { ascending: false }).limit(5),
     supabase.rpc("get_growth_leaderboard", { p_days: 7, p_limit: 5 }),
     supabase
       .from("transactions")
@@ -170,21 +337,11 @@ export default async function ProfileSecondaryPanels({
       .eq("profile_id", userId)
       .order("created_at", { ascending: false })
       .limit(6),
-    supabase
-      .from("shareable_moments")
-      .select("id, moment_type, payload, created_at")
-      .eq("profile_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(6),
-    supabase.rpc("get_profile_leaderboard_context", { p_profile_id: userId, p_top_target: 10 }).maybeSingle(),
-    supabase.rpc("get_active_weekly_titles", { p_limit: 12 }),
-    supabase.from("leaderboard_presence_states").select("last_rank, updated_at").eq("profile_id", userId).maybeSingle(),
   ]);
 
   const spotlightRows = (spotlightResult.data as SpotlightRow[] | null) || [];
   const uniqueSpotlightRows = Array.from(new Map(spotlightRows.map((row) => [row.profile_id, row])).values());
   const spotlightIds = uniqueSpotlightRows.map((row) => row.profile_id);
-
   const spotlightProfilesResult = spotlightIds.length
     ? await supabase.from("profiles").select("id, username, display_name, aura_points").in("id", spotlightIds)
     : { data: [] as SpotlightProfileRow[] };
@@ -220,219 +377,11 @@ export default async function ProfileSecondaryPanels({
     growthPoints: Number(row.growth_points || 0),
   }));
 
-  if (raceContextResult.error) {
-    console.error("[Profile Page] Failed to load race context", raceContextResult.error.message);
-  }
-
-  if (weeklyTitlesResult.error) {
-    console.error("[Profile Page] Failed to load weekly titles", weeklyTitlesResult.error.message);
-  }
-
-  const raceContextRaw = (raceContextResult.data || null) as ProfileLeaderboardContextRow | null;
-  const raceContext = raceContextRaw
-    ? {
-        profileId: raceContextRaw.profile_id,
-        rank: asNumber(raceContextRaw.rank_position),
-        distanceToNext: asNumber(raceContextRaw.distance_to_next),
-        distanceToTop10: asNumber(raceContextRaw.distance_to_top_target),
-        above: raceContextRaw.above_profile_id
-          ? {
-              id: raceContextRaw.above_profile_id,
-              username: raceContextRaw.above_username || "",
-              displayName: raceContextRaw.above_display_name || raceContextRaw.above_username || "",
-              auraPoints: asNumber(raceContextRaw.above_aura_points),
-            }
-          : null,
-        below: raceContextRaw.below_profile_id
-          ? {
-              id: raceContextRaw.below_profile_id,
-              username: raceContextRaw.below_username || "",
-              displayName: raceContextRaw.below_display_name || raceContextRaw.below_username || "",
-              auraPoints: asNumber(raceContextRaw.below_aura_points),
-            }
-          : null,
-      }
-    : null;
-
-  const weeklyTitles = ((weeklyTitlesResult.data as WeeklyTitleRow[] | null) || [])
-    .filter((row) => row.profile_id === userId)
-    .map((row) => ({
-      key: row.title_key,
-      title: WEEKLY_TITLE_LABELS[row.title_key] || row.title,
-    }));
-
-  const presenceState = (presenceStateResult.data as PresenceStateRow | null) || null;
-  const trackedAt = presenceState?.updated_at ?? null;
-  const trackedSinceDate = trackedAt ?? null;
-  const [transactionsSinceTrackedResult, achievementsSinceTrackedResult, momentsSinceTrackedResult, pendingEventsResult] =
-    trackedSinceDate
-      ? await Promise.all([
-          supabase.from("transactions").select("amount").eq("user_id", userId).gt("created_at", trackedSinceDate),
-          supabase
-            .from("user_achievements")
-            .select("achievement_key", { count: "exact", head: true })
-            .eq("user_id", userId)
-            .gt("unlocked_at", trackedSinceDate),
-          supabase
-            .from("shareable_moments")
-            .select("id", { count: "exact", head: true })
-            .eq("profile_id", userId)
-            .gt("created_at", trackedSinceDate),
-          supabase
-            .from("notification_events")
-            .select("id", { count: "exact", head: true })
-            .eq("profile_id", userId)
-            .in("status", ["pending", "processing"]),
-        ])
-      : [{ data: [] as Array<{ amount: number }> }, { count: 0 }, { count: 0 }, { count: 0 }];
-  const auraDeltaSinceTracked = trackedSinceDate
-    ? (((transactionsSinceTrackedResult.data as Array<{ amount: number }> | null) || []) as Array<{ amount: number }>).reduce(
-        (sum, row) => sum + Number(row.amount || 0),
-        0,
-      )
-    : 0;
-  const newMomentsSinceTracked = trackedSinceDate ? Number(momentsSinceTrackedResult.count || 0) : 0;
-  const pendingEvents = trackedSinceDate ? Number(pendingEventsResult.count || 0) : 0;
-  const newAchievementsSinceTracked = trackedSinceDate ? Number(achievementsSinceTrackedResult.count || 0) : 0;
-
-  const activatedReferralsSinceTracked = trackedSinceDate
-    ? referrals.filter((entry) => entry.activatedAt && entry.activatedAt > trackedSinceDate).length
-    : 0;
-
-  const circleIds = Array.from(
-    new Set([userId, ...(referredById ? [referredById] : []), ...referrals.map((entry) => entry.inviteeId)]),
-  );
-  const circleProfilesResult = circleIds.length
-    ? await supabase.from("profiles").select("id, username, display_name, aura_points").in("id", circleIds)
-    : { data: [] as CircleProfileRow[] };
-  const circleProfiles = ((circleProfilesResult.data as CircleProfileRow[] | null) || [])
-    .map((row) => {
-      let relation: "you" | "invited" | "invited_you" = "invited";
-      let relationLabel = "твой человек";
-
-      if (row.id === userId) {
-        relation = "you";
-        relationLabel = "это ты";
-      } else if (referredById && row.id === referredById) {
-        relation = "invited_you";
-        relationLabel = "пригласил тебя";
-      } else {
-        const referral = referrals.find((entry) => entry.inviteeId === row.id);
-        relationLabel =
-          referral?.status === "activated"
-            ? "ты пригласил, петля уже закрылась"
-            : referral?.hasFirstClaim
-              ? "ты пригласил, ждём активность"
-              : "ты пригласил, ждём первый вход";
-      }
-
-      return {
-        id: row.id,
-        username: row.username,
-        displayName: row.display_name || row.username,
-        auraPoints: Number(row.aura_points || 0),
-        relation,
-        relationLabel,
-      };
-    })
-    .sort((left, right) => right.auraPoints - left.auraPoints)
-    .slice(0, 6);
-
-  const activatedInvites = referrals.filter((entry) => entry.status === "activated").length;
-  const pendingInvites = referrals.filter((entry) => entry.status === "pending").length;
-  const momentsCount = (shareableMomentsResult.data as ShareableMomentRow[] | null)?.length || 0;
-
   return (
     <>
-      <ProfileRaceCard
-        raceContext={raceContext}
-        weeklyTitles={weeklyTitles}
-        auraPoints={auraPoints}
-        dailyStreak={dailyStreak}
-      />
-
-      <ReturnPulseCard
-        trackedAt={trackedAt}
-        currentRank={raceContext?.rank ?? null}
-        previousRank={presenceState?.last_rank ?? null}
-        auraDelta={auraDeltaSinceTracked}
-        newAchievements={newAchievementsSinceTracked}
-        newMoments={newMomentsSinceTracked}
-        activatedReferrals={activatedReferralsSinceTracked}
-        pendingEvents={pendingEvents}
-      />
-
-      <details className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-4 backdrop-blur-md">
-        <summary className="list-none cursor-pointer">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/72">Круг и инвайты</p>
-              <p className="mt-1 text-[11px] text-white/52">Кто в твоём круге и на каком шаге стоит приглашение.</p>
-            </div>
-            <p className="text-sm font-black text-neon-green">{activatedInvites + pendingInvites}</p>
-          </div>
-        </summary>
-        <div className="mt-3 space-y-4">
-          <MyCircleCard
-            circleProfiles={circleProfiles}
-            activatedInvites={activatedInvites}
-            pendingInvites={pendingInvites}
-          />
-          <InviteLoopCard
-            inviteCode={inviteCode}
-            webInviteLink={inviteLink}
-            telegramInviteLink={telegramInviteLink}
-            referrals={referrals}
-          />
-        </div>
-      </details>
-
-      <details className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-4 backdrop-blur-md">
-        <summary className="list-none cursor-pointer">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/72">Публикация и шэринг</p>
-              <p className="mt-1 text-[11px] text-white/52">Готовые поводы, ссылка и карточка для сторис.</p>
-            </div>
-            <p className="text-sm font-black text-neon-purple">{momentsCount}</p>
-          </div>
-        </summary>
-        <div className="mt-3 space-y-4">
-          <ShareableMomentsCard
-            moments={(shareableMomentsResult.data as ShareableMomentRow[] | null) || []}
-            username={profileUsername}
-            displayName={displayName}
-            profileShareLink={profileShareLink}
-            inviteLink={inviteLink}
-          />
-          <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/20 p-4">
-            <CopyLink link={profileShareLink} />
-            <ShareButton username={profileUsername} />
-          </div>
-        </div>
-      </details>
-
-      <details className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-4 backdrop-blur-md">
-        <summary className="list-none cursor-pointer">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/72">Аналитика и события</p>
-              <p className="mt-1 text-[11px] text-white/52">Очередь касаний, лидеры и история баланса.</p>
-            </div>
-            <p className="text-sm font-black text-white/75">3 блока</p>
-          </div>
-        </summary>
-        <div className="mt-3 space-y-4">
-          <ReengagementEventsCard events={(reengagementEventsResult.data as NotificationEventRow[] | null) || []} />
-          <LeaderboardPreview
-            auraLeaders={auraLeaders}
-            growthLeaders={growthLeaders}
-            spotlightLeaders={spotlightLeaders}
-            currentUserId={userId}
-          />
-          <AuraTransactions transactions={transactionsResult.data || []} />
-        </div>
-      </details>
+      <ReengagementEventsCard events={(reengagementEventsResult.data as NotificationEventRow[] | null) || []} />
+      <LeaderboardPreview auraLeaders={auraLeaders} growthLeaders={growthLeaders} spotlightLeaders={spotlightLeaders} currentUserId={userId} />
+      <AuraTransactions transactions={transactionsResult.data || []} />
     </>
   );
 }

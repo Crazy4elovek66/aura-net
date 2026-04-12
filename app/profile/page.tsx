@@ -18,6 +18,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import ProfileSecondaryPanels from "./ProfileSecondaryPanels";
+import ProfileTabsNavigation from "./ProfileTabsNavigation";
+import { normalizeProfileTab, type ProfileTabKey } from "./profile-tabs";
 
 interface AuraEffectRow {
   effect_type: "DECAY_SHIELD" | "CARD_ACCENT";
@@ -45,20 +47,89 @@ interface InviteeClaimRow {
   user_id: string;
 }
 
-function ProfileSecondaryFallback() {
+interface ProfilePageProps {
+  searchParams: Promise<{
+    tab?: string;
+  }>;
+}
+
+function ProfileSecondaryFallback({ activeTab }: { activeTab: Extract<ProfileTabKey, "progress" | "circle" | "history"> }) {
+  const titleByTab: Record<Extract<ProfileTabKey, "progress" | "circle" | "history">, string> = {
+    progress: "Подгружаем прогресс",
+    circle: "Подгружаем круг и инвайты",
+    history: "Подгружаем историю активности",
+  };
+
+  const hintByTab: Record<Extract<ProfileTabKey, "progress" | "circle" | "history">, string> = {
+    progress: "Собираем гонку, пульс и ближайшие цели",
+    circle: "Собираем людей в круге, статусы и поводы для шэринга",
+    history: "Собираем события, лидеров и историю транзакций",
+  };
+
   return (
-    <>
-      <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Подгружаем гонку и события</p>
-      </section>
-      <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Подгружаем историю ауры</p>
-      </section>
-    </>
+    <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
+      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/58">{titleByTab[activeTab]}</p>
+      <p className="mt-2 text-[11px] text-white/45">{hintByTab[activeTab]}</p>
+    </section>
   );
 }
 
-export default async function ProfilePage() {
+function ProfileHubSummary({
+  auraPoints,
+  dailyStreak,
+  claimedToday,
+  activatedInvites,
+  pendingInvites,
+}: {
+  auraPoints: number;
+  dailyStreak: number;
+  claimedToday: boolean;
+  activatedInvites: number;
+  pendingInvites: number;
+}) {
+  return (
+    <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-5 backdrop-blur-md">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.18em] text-white/72">Личный фокус</h2>
+          <p className="mt-1 text-[11px] text-white/52">
+            Короткий срез без перегруза: твой статус, ежедневный ритм и куда нажать дальше.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-neon-purple/30 bg-neon-purple/10 px-3 py-2 text-right">
+          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Баланс</p>
+          <p className="text-sm font-black text-neon-purple">{auraPoints}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <Link href="/profile?tab=profile#daily-reward-card" className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[9px] font-black uppercase tracking-[0.1em] text-white/50">Ежедневный ритм</p>
+          <p className="mt-1 text-[12px] font-black text-white">
+            {claimedToday ? "Награда уже забрана" : "Доступна награда"}
+          </p>
+          <p className="mt-1 text-[10px] text-white/52">Серия: {dailyStreak} дн.</p>
+        </Link>
+        <Link href="/profile?tab=progress" className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[9px] font-black uppercase tracking-[0.1em] text-white/50">Прогресс</p>
+          <p className="mt-1 text-[12px] font-black text-white">Следующая цель и динамика</p>
+          <p className="mt-1 text-[10px] text-white/52">Гонка, пульс, next steps</p>
+        </Link>
+        <Link href="/profile?tab=circle" className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[9px] font-black uppercase tracking-[0.1em] text-white/50">Круг</p>
+          <p className="mt-1 text-[12px] font-black text-white">
+            {activatedInvites > 0 ? `${activatedInvites} актив.` : "Запусти первую петлю"}
+          </p>
+          <p className="mt-1 text-[10px] text-white/52">В ожидании: {pendingInvites}</p>
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+export default async function ProfilePage({ searchParams }: ProfilePageProps) {
+  const params = await searchParams;
+  const activeTab = normalizeProfileTab(params.tab);
   const supabase = await createClient();
   const headerStore = await headers();
   const forwardedHost = headerStore.get("x-forwarded-host");
@@ -80,7 +151,12 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  await supabase.rpc("apply_daily_decay", { p_profile_id: user.id });
+  if (shouldRunRuntimeTask(`profile-page:daily-decay:${user.id}`, 45_000)) {
+    const { error: decayError } = await supabase.rpc("apply_daily_decay", { p_profile_id: user.id });
+    if (decayError) {
+      console.error("[Profile Page] Failed to apply daily decay", decayError.message);
+    }
+  }
 
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
 
@@ -97,7 +173,7 @@ export default async function ProfilePage() {
 
   after(async () => {
     try {
-      if (!shouldRunRuntimeTask(`profile-page-after:${user.id}`, 5_000)) {
+      if (!shouldRunRuntimeTask(`profile-page-after:${user.id}`, 45_000)) {
         return;
       }
 
@@ -323,78 +399,136 @@ export default async function ProfilePage() {
         </header>
 
         <main className="flex flex-col items-center gap-6 pb-12">
-          <AuraCard
-            username={profile.username}
-            displayName={profile.display_name || profile.username}
-            avatarUrl={profile.avatar_url}
-            auraPoints={profile.aura_points}
-            totalVotesUp={votesUpResult.count || 0}
-            totalVotesDown={votesDownResult.count || 0}
-            profileId={profile.id}
-            isOwner={true}
-            status={profile.status}
-            specialCard={profile.special_card}
-            canManageSpecialCard={canManageSpecialCard}
-            spotlightUntil={spotlightUntil}
-            decayShieldUntil={decayShieldUntil}
-            cardAccent={cardAccent}
-            cardAccentUntil={cardAccentUntil}
-          />
+          <ProfileTabsNavigation activeTab={activeTab}>
+            <div className="flex flex-col items-center gap-6 pb-2">
+              {activeTab === "profile" ? (
+                <>
+                  <AuraCard
+                    username={profile.username}
+                    displayName={profile.display_name || profile.username}
+                    avatarUrl={profile.avatar_url}
+                    auraPoints={profile.aura_points}
+                    totalVotesUp={votesUpResult.count || 0}
+                    totalVotesDown={votesDownResult.count || 0}
+                    profileId={profile.id}
+                    isOwner={true}
+                    status={profile.status}
+                    specialCard={profile.special_card}
+                    canManageSpecialCard={canManageSpecialCard}
+                    spotlightUntil={spotlightUntil}
+                    decayShieldUntil={decayShieldUntil}
+                    cardAccent={cardAccent}
+                    cardAccentUntil={cardAccentUntil}
+                  />
+                  <DailyRewardCard
+                    initialState={{
+                      canClaim: dailyRewardState.canClaim,
+                      claimedToday: dailyRewardState.claimedToday,
+                      streak: profile.daily_streak,
+                      rewardToday: dailyRewardState.rewardToday,
+                      nextReward: dailyRewardState.nextReward,
+                      availableAt: dailyRewardState.availableAt,
+                      streakWillReset: dailyRewardState.streakWillReset,
+                      projectedStreak: dailyRewardState.projectedStreak,
+                      weeklyProgressDays: weeklyRewardDays,
+                      weeklyTargetDays: 5,
+                    }}
+                  />
+                  <ProfileHubSummary
+                    auraPoints={profile.aura_points}
+                    dailyStreak={profile.daily_streak}
+                    claimedToday={dailyRewardState.claimedToday}
+                    activatedInvites={activatedInvites}
+                    pendingInvites={pendingInvites}
+                  />
+                </>
+              ) : null}
 
-          <ProfileNextStepsCard
-            auraPoints={profile.aura_points}
-            dailyStreak={profile.daily_streak}
-            claimedToday={dailyRewardState.claimedToday}
-            activatedInvites={activatedInvites}
-            pendingInvites={pendingInvites}
-            votesCast={votesCast}
-            profileShareLink={profileShareLink}
-            inviteLink={webInviteLink}
-          />
+              {activeTab === "progress" ? (
+                <>
+                  <ProfileNextStepsCard
+                    auraPoints={profile.aura_points}
+                    dailyStreak={profile.daily_streak}
+                    claimedToday={dailyRewardState.claimedToday}
+                    activatedInvites={activatedInvites}
+                    pendingInvites={pendingInvites}
+                    votesCast={votesCast}
+                    profileShareLink={profileShareLink}
+                    inviteLink={webInviteLink}
+                  />
+                  <Suspense fallback={<ProfileSecondaryFallback activeTab="progress" />}>
+                    <ProfileSecondaryPanels
+                      activeTab="progress"
+                      userId={user.id}
+                      auraPoints={profile.aura_points}
+                      dailyStreak={profile.daily_streak}
+                      referredById={profile.referred_by ?? null}
+                      profileUsername={profile.username}
+                      displayName={profile.display_name || profile.username}
+                      profileShareLink={profileShareLink}
+                      inviteLink={webInviteLink}
+                      inviteCode={inviteCode}
+                      telegramInviteLink={telegramInviteLink}
+                      referrals={referralEntries}
+                    />
+                  </Suspense>
+                </>
+              ) : null}
 
-          <DailyRewardCard
-            initialState={{
-              canClaim: dailyRewardState.canClaim,
-              claimedToday: dailyRewardState.claimedToday,
-              streak: profile.daily_streak,
-              rewardToday: dailyRewardState.rewardToday,
-              nextReward: dailyRewardState.nextReward,
-              availableAt: dailyRewardState.availableAt,
-              streakWillReset: dailyRewardState.streakWillReset,
-              projectedStreak: dailyRewardState.projectedStreak,
-              weeklyProgressDays: weeklyRewardDays,
-              weeklyTargetDays: 5,
-            }}
-          />
+              {activeTab === "circle" ? (
+                <Suspense fallback={<ProfileSecondaryFallback activeTab="circle" />}>
+                  <ProfileSecondaryPanels
+                    activeTab="circle"
+                    userId={user.id}
+                    auraPoints={profile.aura_points}
+                    dailyStreak={profile.daily_streak}
+                    referredById={profile.referred_by ?? null}
+                    profileUsername={profile.username}
+                    displayName={profile.display_name || profile.username}
+                    profileShareLink={profileShareLink}
+                    inviteLink={webInviteLink}
+                    inviteCode={inviteCode}
+                    telegramInviteLink={telegramInviteLink}
+                    referrals={referralEntries}
+                  />
+                </Suspense>
+              ) : null}
 
-          <AuraSpendActionsCard
-            profileId={profile.id}
-            initialState={{
-              streak: Number(profile.daily_streak || 0),
-              decayShieldUntil,
-              spotlightUntil,
-              cardAccent,
-              cardAccentUntil,
-              canRescueStreak: streakRescueStatus.canRescue,
-              rescueAvailableAt: streakRescueStatus.availableAt,
-            }}
-          />
+              {activeTab === "shop" ? (
+                <AuraSpendActionsCard
+                  profileId={profile.id}
+                  initialState={{
+                    streak: Number(profile.daily_streak || 0),
+                    decayShieldUntil,
+                    spotlightUntil,
+                    cardAccent,
+                    cardAccentUntil,
+                    canRescueStreak: streakRescueStatus.canRescue,
+                    rescueAvailableAt: streakRescueStatus.availableAt,
+                  }}
+                />
+              ) : null}
 
-          <Suspense fallback={<ProfileSecondaryFallback />}>
-            <ProfileSecondaryPanels
-              userId={user.id}
-              auraPoints={profile.aura_points}
-              dailyStreak={profile.daily_streak}
-              referredById={profile.referred_by ?? null}
-              profileUsername={profile.username}
-              displayName={profile.display_name || profile.username}
-              profileShareLink={profileShareLink}
-              inviteLink={webInviteLink}
-              inviteCode={inviteCode}
-              telegramInviteLink={telegramInviteLink}
-              referrals={referralEntries}
-            />
-          </Suspense>
+              {activeTab === "history" ? (
+                <Suspense fallback={<ProfileSecondaryFallback activeTab="history" />}>
+                  <ProfileSecondaryPanels
+                    activeTab="history"
+                    userId={user.id}
+                    auraPoints={profile.aura_points}
+                    dailyStreak={profile.daily_streak}
+                    referredById={profile.referred_by ?? null}
+                    profileUsername={profile.username}
+                    displayName={profile.display_name || profile.username}
+                    profileShareLink={profileShareLink}
+                    inviteLink={webInviteLink}
+                    inviteCode={inviteCode}
+                    telegramInviteLink={telegramInviteLink}
+                    referrals={referralEntries}
+                  />
+                </Suspense>
+              ) : null}
+            </div>
+          </ProfileTabsNavigation>
         </main>
       </div>
     </div>
