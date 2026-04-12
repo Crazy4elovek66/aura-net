@@ -21,6 +21,14 @@ interface TelegramAuthResponse {
   referralCode?: string | null;
 }
 
+interface DevLoginResponse {
+  success?: boolean;
+  error?: string;
+  email?: string;
+  password?: string;
+  redirectTo?: string;
+}
+
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -48,13 +56,16 @@ export default function LoginClient({
   errorCode,
   errorReason,
   referralCode,
+  devLoginEnabled,
 }: {
   errorCode: string | null;
   errorReason: string | null;
   referralCode: string | null;
+  devLoginEnabled: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [devLoginLoading, setDevLoginLoading] = useState(false);
   const [tmaDetected, setTmaDetected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scriptContainerRef = useRef<HTMLDivElement>(null);
@@ -103,6 +114,58 @@ export default function LoginClient({
       console.error("[Login] Failed to bind referral", error);
     }
   }, []);
+
+  const handleDevLogin = useCallback(async () => {
+    if (!devLoginEnabled || devLoginLoading) return;
+
+    setDevLoginLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/dev-login", {
+        method: "POST",
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as DevLoginResponse;
+
+      if (!response.ok || !payload.email || !payload.password || !payload.redirectTo) {
+        throw new Error(payload.error || "Dev login request failed");
+      }
+
+      const signInResult = await supabase.auth.signInWithPassword({
+        email: payload.email,
+        password: payload.password,
+      });
+
+      if (signInResult.error || !signInResult.data.user) {
+        throw signInResult.error || new Error("Failed to create browser session");
+      }
+
+      const {
+        data: { user: confirmedUser },
+      } = await supabase.auth.getUser();
+      if (!confirmedUser) {
+        throw new Error("Browser session is not ready");
+      }
+
+      notify({
+        variant: "success",
+        title: "Dev login",
+        message: "Session created. Redirecting...",
+      });
+
+      window.location.replace(payload.redirectTo);
+    } catch (devLoginError: unknown) {
+      const message = getErrorMessage(devLoginError, "Dev login failed");
+      setError(`Dev login error: ${message}`);
+      notify({
+        variant: "error",
+        title: "Dev login failed",
+        message,
+      });
+    } finally {
+      setDevLoginLoading(false);
+    }
+  }, [devLoginEnabled, devLoginLoading, notify]);
 
   useEffect(() => {
     setMounted(true);
@@ -295,6 +358,25 @@ export default function LoginClient({
                 <p className="mt-2 text-[11px] leading-relaxed text-white/70">
                   Этот деплой сейчас рассчитан только на Telegram Mini App. Снаружи не показываем сломанный виджет и не ведём в тупик.
                 </p>
+              </div>
+            ) : null}
+
+            {devLoginEnabled && !tmaDetected ? (
+              <div className="w-full rounded-2xl border border-neon-green/30 bg-neon-green/10 p-4 text-left">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neon-green">Dev login for localhost</p>
+                <p className="mt-2 text-[11px] leading-relaxed text-white/72">
+                  Uses preconfigured test account and creates a normal Supabase session.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleDevLogin();
+                  }}
+                  disabled={devLoginLoading}
+                  className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-neon-green/45 bg-neon-green/18 px-4 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-neon-green transition-all hover:bg-neon-green/22 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {devLoginLoading ? "Signing in..." : "Enter test account"}
+                </button>
               </div>
             ) : null}
 

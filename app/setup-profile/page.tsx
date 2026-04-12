@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 
+interface DevLoginResponse {
+  success?: boolean;
+  error?: string;
+  email?: string;
+  password?: string;
+}
+
 export default function SetupProfilePage() {
   const [username, setUsername] = useState("");
   const [status, setStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
@@ -12,6 +19,31 @@ export default function SetupProfilePage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  const tryRestoreDevSession = async () => {
+    const host = window.location.hostname;
+    const isLocalhost = host === "localhost" || host === "127.0.0.1" || host === "::1";
+    if (!isLocalhost) return null;
+
+    const response = await fetch("/api/auth/dev-login", { method: "POST" });
+    const payload = (await response.json().catch(() => ({}))) as DevLoginResponse;
+
+    if (!response.ok || !payload.email || !payload.password) {
+      return null;
+    }
+
+    const signInResult = await supabase.auth.signInWithPassword({
+      email: payload.email,
+      password: payload.password,
+    });
+
+    if (signInResult.error || !signInResult.data.user) {
+      return null;
+    }
+
+    return signInResult.data.user;
+  };
+
   const getErrorMessage = (errorValue: unknown) =>
     errorValue instanceof Error
       ? errorValue.message
@@ -76,7 +108,20 @@ export default function SetupProfilePage() {
 
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      let {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session?.user) {
+          user = sessionData.session.user;
+        }
+      }
+
+      if (!user) {
+        user = await tryRestoreDevSession();
+      }
       if (!user) throw new Error("Пользователь не найден");
 
       const { error: updateError } = await supabase
