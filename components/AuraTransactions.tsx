@@ -1,4 +1,4 @@
-interface AuraTransaction {
+﻿interface AuraTransaction {
   id: string;
   amount: number;
   type: string;
@@ -21,8 +21,9 @@ const TYPE_LABELS: Record<string, string> = {
   streak_milestone: "Этап серии",
   weekly_activity_reward: "Недельная награда",
   achievement_reward: "Награда за достижение",
-  referral_inviter_reward: "Invite reward",
-  referral_invitee_reward: "Welcome reward",
+  referral_inviter_reward: "Инвайт: активация",
+  referral_invitee_reward: "Бонус за вход",
+  referral_activity_reward: "Инвайт: процент",
 };
 
 function extractFirstNumber(value: string | null): number | null {
@@ -47,7 +48,7 @@ function formatDescription(tx: AuraTransaction) {
   if (tx.type === "daily_reward") {
     const streak = getMetadataValue<number>(metadata, "streak") ?? extractFirstNumber(tx.description);
     const rewardRole = getMetadataValue<string>(metadata, "rewardRole");
-    return `${streak ? `Серия: день ${streak}` : "Награда за серию"}${rewardRole === "supporting" ? " • вспомогательный income" : ""}`;
+    return `${streak ? `Серия: день ${streak}` : "Награда за серию"}${rewardRole === "supporting" ? " • вспомогательный доход" : ""}`;
   }
 
   if (tx.type === "streak_milestone") {
@@ -67,11 +68,22 @@ function formatDescription(tx: AuraTransaction) {
 
   if (tx.type === "referral_inviter_reward") {
     const inviteeId = getMetadataValue<string>(metadata, "inviteeId");
-    return inviteeId ? `Активирован приглашённый ${inviteeId.slice(0, 8)}` : "Активированный приглашённый";
+    return inviteeId ? `Активирован приглашённый ${inviteeId.slice(0, 8)}` : "Активирован приглашённый";
   }
 
   if (tx.type === "referral_invitee_reward") {
     return "Бонус за вход по приглашению";
+  }
+
+  if (tx.type === "referral_activity_reward") {
+    const inviteeId = getMetadataValue<string>(metadata, "inviteeId");
+    const ratePercent = getMetadataValue<number>(metadata, "ratePercent");
+    const sourceType = getMetadataValue<string>(metadata, "sourceType");
+    const rateLabel = typeof ratePercent === "number" ? `${ratePercent}%` : "процент";
+    const sourceLabel = sourceType === "vote_up" ? "плюс-голоса" : "активности";
+    return inviteeId
+      ? `${rateLabel} с ${sourceLabel} ${inviteeId.slice(0, 8)}`
+      : `${rateLabel} с активности приглашённого`;
   }
 
   if (tx.type === "spotlight" || tx.type === "boost") {
@@ -117,7 +129,7 @@ export default function AuraTransactions({ transactions }: { transactions: AuraT
   return (
     <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-5 backdrop-blur-md">
       <h2 className="mb-1 text-[10px] font-black uppercase tracking-[0.2em] text-white/70">История ауры</h2>
-      <p className="mb-3 text-[11px] text-white/45">Каждое изменение баланса логируется без “магических” скачков.</p>
+      <p className="mb-3 text-[11px] text-white/45">Каждое изменение баланса логируется без &quot;магических&quot; скачков.</p>
 
       <div className="space-y-2">
         {transactions.map((tx) => {
@@ -142,3 +154,4 @@ export default function AuraTransactions({ transactions }: { transactions: AuraT
     </section>
   );
 }
+

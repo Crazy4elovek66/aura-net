@@ -2,9 +2,7 @@ import AuraCard from "@/components/AuraCard";
 import AuraSpendActionsCard from "@/components/AuraSpendActionsCard";
 import Background from "@/components/Background";
 import DailyRewardCard from "@/components/DailyRewardCard";
-import InviteLoopCard from "@/components/InviteLoopCard";
 import ProfileNextStepsCard from "@/components/ProfileNextStepsCard";
-import ShareButton from "@/components/ShareButton";
 import { getDailyRewardStatus, getStreakRescueStatus } from "@/lib/economy";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -19,7 +17,6 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import CopyLink from "./CopyLink";
 import ProfileSecondaryPanels from "./ProfileSecondaryPanels";
 
 interface AuraEffectRow {
@@ -393,20 +390,11 @@ export default async function ProfilePage() {
               displayName={profile.display_name || profile.username}
               profileShareLink={profileShareLink}
               inviteLink={webInviteLink}
-              referrals={referralEntries}
-            />
-          </Suspense>
-
-          <div className="w-full flex flex-col items-center space-y-6 pb-20">
-            <InviteLoopCard
               inviteCode={inviteCode}
-              webInviteLink={webInviteLink}
               telegramInviteLink={telegramInviteLink}
               referrals={referralEntries}
             />
-            <CopyLink link={profileShareLink} />
-            <ShareButton username={profile.username} />
-          </div>
+          </Suspense>
         </main>
       </div>
     </div>

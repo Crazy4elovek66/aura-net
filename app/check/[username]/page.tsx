@@ -1,5 +1,6 @@
 import AuraCard from "@/components/AuraCard";
 import Background from "@/components/Background";
+import { VOTE_PAIR_COOLDOWN_HOURS } from "@/lib/economy";
 import { getProfileModerationState, isProfileLimited } from "@/lib/server/profile-moderation";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
@@ -62,11 +63,13 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
   const existingVotePromise = currentUser
     ? supabase
         .from("votes")
-        .select("id")
+        .select("id, created_at")
         .eq("voter_id", currentUser.id)
         .eq("target_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle()
-    : Promise.resolve({ data: null as { id: string } | null, error: null });
+    : Promise.resolve({ data: null as { id: string; created_at: string } | null, error: null });
 
   const [votesUpResult, votesDownResult, existingVoteResult, activeBoostResult, activeEffectsResult] = await Promise.all([
     supabase
@@ -95,7 +98,12 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
       .gt("expires_at", nowIso),
   ]);
 
-  const hasVoted = Boolean(existingVoteResult.data);
+  const latestVoteAt = existingVoteResult.data?.created_at ?? null;
+  const voteCooldownUntil = latestVoteAt
+    ? new Date(new Date(latestVoteAt).getTime() + VOTE_PAIR_COOLDOWN_HOURS * 60 * 60 * 1000)
+    : null;
+  const nowMs = new Date(nowIso).getTime();
+  const hasVoted = Boolean(voteCooldownUntil && voteCooldownUntil.getTime() > nowMs);
   const activeEffects = (activeEffectsResult.data as AuraEffectRow[] | null) || [];
   const decayShieldUntil = activeEffects.find((effect) => effect.effect_type === "DECAY_SHIELD")?.expires_at ?? null;
   const activeCardAccent = activeEffects.find((effect) => effect.effect_type === "CARD_ACCENT");
@@ -128,6 +136,7 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
             specialCard={profile.special_card}
             canManageSpecialCard={canManageSpecialCard}
             hasVoted={hasVoted}
+            voteCooldownUntil={hasVoted && voteCooldownUntil ? voteCooldownUntil.toISOString() : null}
             spotlightUntil={activeBoostResult.data?.expires_at ?? null}
             decayShieldUntil={decayShieldUntil}
             cardAccent={activeCardAccent?.effect_variant ?? null}

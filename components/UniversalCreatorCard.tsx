@@ -45,6 +45,8 @@ interface UniversalCreatorCardProps {
     onAuraMinus?: () => void;
     votePendingType?: "up" | "down" | null;
     hasVoted?: boolean;
+    voteLockHint?: string | null;
+    cardAccentVariant?: "NEON_EDGE" | "GOLD_PULSE" | "FROST_RING" | null;
 }
 
 
@@ -88,6 +90,8 @@ export default function UniversalCreatorCard({
    onAuraMinus,
    votePendingType = null,
    hasVoted = false,
+   voteLockHint = null,
+   cardAccentVariant = null,
 }: UniversalCreatorCardProps) {
    // Dynamic Styling based on Tier
    const isSigma = tier === 'SIGMA';
@@ -100,23 +104,31 @@ export default function UniversalCreatorCard({
  
     const primaryGlow = glowColor;
     const auraPoints = parseFloat(data.auraPoints.replace(/\s/g, '').replace(',', '.')) * (data.auraPoints.includes('K') ? 1000 : 1);
-    const emoji = isAdmin ? "👑" : isResonance ? "🧭" : getAuraEmoji(auraPoints);
-    const voteInFlight = votePendingType !== null;
-    const voteLocked = hasVoted || voteInFlight;
+   const emoji = isAdmin ? "👑" : isResonance ? "🧭" : getAuraEmoji(auraPoints);
+   const voteInFlight = votePendingType !== null;
+   const voteLocked = hasVoted || voteInFlight;
+   const hasCardAccent = cardAccentVariant !== null;
+   const tierSurfaceClass = isAdmin ? "architect-card shadow-[0_0_60px_-10px_rgba(168,85,247,0.5)]" : isResonance ? "resonance-card" : "";
+   const baseBorderClass = hasCardAccent
+      ? "border-transparent"
+      : isSigma
+      ? "border-yellow-400/60"
+      : isThatOne
+      ? "border-indigo-500/50"
+      : isResonance
+      ? "border-cyan-400/45"
+      : isHero
+      ? "border-purple-500/40"
+      : isAdmin
+      ? "border-purple-500/40"
+      : "border-white/[0.08] shadow-2xl";
     
     // Default Tier Emojis for the "Box" if no avatar
     const defaultTierEmoji = isAdmin ? "👑" : isResonance ? "🧭" : getAuraEmoji(auraPoints);
 
    return (
       <div
-         className={`relative w-[min(420px,85vw)] mx-auto min-h-[min(600px,90vh)] h-auto rounded-[3.5em] group select-none bg-[#050505] border transform-gpu transition-all duration-700 isolate ${
-            isAdmin ? 'architect-card shadow-[0_0_60px_-10px_rgba(168,85,247,0.5)] border-purple-500/40' :
-            isSigma ? 'border-yellow-400/60' :
-            isThatOne ? 'border-indigo-500/50' :
-            isResonance ? 'resonance-card border-cyan-400/45' :
-            isHero ? 'border-purple-500/40' :
-            'border-white/[0.08] shadow-2xl'
-         }`}
+         className={`relative w-[min(420px,85vw)] mx-auto min-h-[min(600px,90vh)] h-auto rounded-[3.5em] group select-none bg-[#050505] border transform-gpu transition-all duration-700 isolate ${tierSurfaceClass} ${baseBorderClass}`}
          style={{
             /* [SCALE] Скорректированный масштаб (уточненный для иерархии) */
             fontSize: 'clamp(12px, 0.85rem + 0.4vw, 22px)',
@@ -131,6 +143,16 @@ export default function UniversalCreatorCard({
                : "0 30px 60px rgba(0,0,0,0.8)"
          }}
       >
+         {cardAccentVariant === "NEON_EDGE" && (
+            <div className="pointer-events-none absolute inset-0 z-10 rounded-[inherit] border border-fuchsia-300/85 shadow-[0_0_26px_rgba(232,121,249,0.55)]" />
+         )}
+         {cardAccentVariant === "GOLD_PULSE" && (
+            <div className="pointer-events-none absolute inset-0 z-10 rounded-[inherit] border border-amber-300/90 shadow-[0_0_32px_rgba(252,211,77,0.62)] animate-pulse" />
+         )}
+         {cardAccentVariant === "FROST_RING" && (
+            <div className="pointer-events-none absolute inset-0 z-10 rounded-[inherit] border border-cyan-300/85 shadow-[0_0_25px_rgba(103,232,249,0.55)]" />
+         )}
+
          {/* Background Layer (Animations) - Fixed Clipping */}
          <div className="absolute inset-0 z-0 rounded-[3.5em] overflow-hidden">
             {children}
@@ -387,7 +409,7 @@ export default function UniversalCreatorCard({
                     </div>
                     {hasVoted && (
                       <p className="text-center text-[0.55em] uppercase tracking-[0.18em] text-white/45 font-black">
-                        Голос уже учтен
+                        {voteLockHint || "Голос уже учтен"}
                       </p>
                     )}
                  </div>

@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -40,6 +40,17 @@ test("schema guards preserve referral activation rules", () => {
   assert.match(schema, /target_id = p_invitee_id and v\.voter_id is not null and v\.voter_id <> v_referral\.inviter_id/);
 });
 
+test("schema guards preserve vote cooldown and referral commission rules", () => {
+  const schema = read("schema.sql");
+
+  assert.match(schema, /vote cooldown active until/i);
+  assert.match(schema, /p_pair_cooldown_hours integer default 12/);
+  assert.match(schema, /create table if not exists public\.referral_activity_commissions/);
+  assert.match(schema, /referral_activity_reward/);
+  assert.match(schema, /trg_transactions_referral_commission/);
+  assert.match(schema, /metadata->>'voterId'/);
+});
+
 test("schema guards preserve bind and notification dedupe rules", () => {
   const schema = read("schema.sql");
 
@@ -61,6 +72,7 @@ test("route source keeps critical moderation and public contract keys", () => {
   assert.match(voteRoute, /PROFILE_LIMITED/);
   assert.match(voteRoute, /TARGET_PROFILE_LIMITED/);
   assert.match(voteRoute, /buildVoteSuccessPayloadForResponse|comment:/);
+  assert.match(voteRoute, /VOTE_PAIR_COOLDOWN_HOURS/);
 
   assert.match(rewardRoute, /PROFILE_LIMITED/);
   assert.match(rewardRoute, /buildDailyRewardSuccessPayload|claimed:/);
@@ -73,3 +85,4 @@ test("route source keeps critical moderation and public contract keys", () => {
   assert.match(leaderboardPreviewRoute, /growthLeaders/);
   assert.match(leaderboardPreviewRoute, /spotlightLeaders/);
 });
+

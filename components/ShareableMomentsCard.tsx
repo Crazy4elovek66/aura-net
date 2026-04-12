@@ -20,11 +20,11 @@ interface ShareableMomentsCardProps {
 
 const MOMENT_LABELS: Record<string, string> = {
   achievement_unlocked: "Достижение",
-  tier_reached: "Новый tier",
+  tier_reached: "Новый уровень",
   weekly_title_awarded: "Титул недели",
-  streak_milestone: "Milestone серии",
+  streak_milestone: "Рубеж серии",
   leaderboard_top10_entered: "Вход в топ-10",
-  referral_activated: "Инвайт сработал",
+  referral_activated: "Сработал инвайт",
 };
 
 function asNumber(value: unknown) {
@@ -39,7 +39,7 @@ function getMomentHeadline(moment: ShareableMoment) {
   }
 
   if (moment.moment_type === "tier_reached") {
-    return typeof payload.tierLabel === "string" ? `Вышел в ${payload.tierLabel}` : "Открыл новый tier";
+    return typeof payload.tierLabel === "string" ? `Вышел в ${payload.tierLabel}` : "Открыл новый уровень";
   }
 
   if (moment.moment_type === "weekly_title_awarded") {
@@ -65,30 +65,30 @@ function getMomentReason(moment: ShareableMoment) {
   const payload = moment.payload || {};
 
   if (moment.moment_type === "achievement_unlocked") {
-    return "Это понятный публичный апдейт: людям легче реагировать на новый статус, чем на абстрактный рост.";
+    return "Публичное достижение проще воспринимается и чаще вызывает реакцию, чем абстрактный рост.";
   }
 
   if (moment.moment_type === "tier_reached") {
-    return "Tier меняет ощущение от карточки, значит событие выглядит заметно даже без лишнего контекста.";
+    return "Новый уровень заметно меняет статус карточки. Это хороший триггер для возврата аудитории.";
   }
 
   if (moment.moment_type === "weekly_title_awarded") {
-    return "Недельный титул живёт ограниченное время, поэтому им особенно естественно делиться сразу.";
+    return "Титул живёт ограниченное время, поэтому им лучше делиться сразу, пока он актуален.";
   }
 
   if (moment.moment_type === "streak_milestone") {
-    return `Серия в ${asNumber(payload.milestoneDays)} дней выглядит как реальная дисциплина, а не случайный всплеск.`;
+    return `Серия в ${asNumber(payload.milestoneDays)} дней выглядит как дисциплина, а не случайный всплеск.`;
   }
 
   if (moment.moment_type === "leaderboard_top10_entered") {
-    return "Попадание в топ-10 создаёт хороший повод вернуть людей к твоему профилю именно сейчас.";
+    return "Попадание в топ-10 даёт сильный социальный повод вернуть людей к твоему профилю прямо сейчас.";
   }
 
   if (moment.moment_type === "referral_activated") {
-    return "Это сильный момент для нового захода: ты не просто растёшь сам, а запускаешь следующий круг через друга.";
+    return "Это сигнал, что твой круг растёт и механика приглашений работает на практике.";
   }
 
-  return "Карточка уже выглядит живой, осталось дать ей понятный повод.";
+  return "Карточка уже выглядит живой, осталось дать ей понятный публичный повод.";
 }
 
 function buildShareText(
@@ -104,7 +104,7 @@ function buildShareText(
   if (moment.moment_type === "achievement_unlocked") {
     opener = `Открыл достижение «${typeof payload.achievementTitle === "string" ? payload.achievementTitle : "новый апдейт"}» в Aura.net.`;
   } else if (moment.moment_type === "tier_reached") {
-    opener = `Поднялся до tier «${typeof payload.tierLabel === "string" ? payload.tierLabel : "новый уровень"}».`;
+    opener = `Поднялся до уровня «${typeof payload.tierLabel === "string" ? payload.tierLabel : "новый уровень"}».`;
   } else if (moment.moment_type === "weekly_title_awarded") {
     opener = `Получил недельный титул «${typeof payload.title === "string" ? payload.title : "новый титул"}».`;
   } else if (moment.moment_type === "streak_milestone") {
@@ -183,25 +183,28 @@ export default function ShareableMomentsCard({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Поводы поделиться</h2>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Поделиться моментом</h2>
           <p className="mt-2 text-[11px] leading-relaxed text-white/55">
-            Не просто лог событий. Здесь лежат моменты, которые уже готовы стать сторис, сообщением другу или поводом вернуть
-            людей к твоей карточке.
+            Понятная цель: дать людям конкретный апдейт, вернуть их к карточке и при желании сразу приложить инвайт.
           </p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right">
-          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Сейчас доступно</p>
+          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Готово к отправке</p>
           <p className="text-sm font-black text-white">{moments.length}</p>
         </div>
       </div>
 
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 text-[10px] text-white/65">Показываешь реальный апдейт</div>
+        <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 text-[10px] text-white/65">Возвращаешь внимание к профилю</div>
+        <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 text-[10px] text-white/65">Двигаешь инвайты и круг</div>
+      </div>
+
       {featuredMoment ? (
-        <div className="mt-4 rounded-[1.75rem] border border-neon-purple/25 bg-neon-purple/[0.08] p-4">
+        <div className="mt-4 rounded-[1.5rem] border border-neon-purple/25 bg-neon-purple/[0.08] p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[9px] font-black uppercase tracking-[0.14em] text-neon-purple/90">
-                Лучший момент сейчас
-              </p>
+              <p className="text-[9px] font-black uppercase tracking-[0.14em] text-neon-purple/90">Рекомендуемый момент</p>
               <p className="mt-2 text-sm font-black text-white">
                 {MOMENT_LABELS[featuredMoment.moment_type] || featuredMoment.moment_type}
               </p>
@@ -231,14 +234,14 @@ export default function ShareableMomentsCard({
                 href={inviteLink}
                 className="rounded-xl border border-neon-green/30 bg-neon-green/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-neon-green transition-colors hover:bg-neon-green/15"
               >
-                Приложить инвайт
+                Добавить инвайт
               </a>
             ) : null}
           </div>
         </div>
       ) : (
         <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-[11px] leading-relaxed text-white/58">
-          Пока без свежих моментов. Они появятся после достижений, титулов недели, входа в топ-10, milestones серии и
+          Пока без свежих моментов. Они появятся после достижений, недельных титулов, входа в топ-10, рубежей серии и
           активации инвайтов.
         </p>
       )}
@@ -250,30 +253,33 @@ export default function ShareableMomentsCard({
       ) : null}
 
       {moments.length > 1 ? (
-        <div className="mt-3 space-y-2">
-          {moments.slice(1).map((moment) => (
-            <div key={moment.id} className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/55">
-                    {MOMENT_LABELS[moment.moment_type] || moment.moment_type}
-                  </p>
-                  <p className="mt-1 text-sm text-white/90">{getMomentHeadline(moment)}</p>
+        <details className="group mt-3 rounded-2xl border border-white/10 bg-white/[0.02]">
+          <summary className="list-none cursor-pointer px-4 py-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/70">Ещё моменты ({moments.length - 1})</p>
+          </summary>
+          <div className="space-y-2 px-3 pb-3">
+            {moments.slice(1).map((moment) => (
+              <div key={moment.id} className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/55">
+                      {MOMENT_LABELS[moment.moment_type] || moment.moment_type}
+                    </p>
+                    <p className="mt-1 text-sm text-white/90">{getMomentHeadline(moment)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(moment)}
+                    className="shrink-0 rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.1em] text-white/70 transition-colors hover:border-white/25"
+                  >
+                    {copiedMomentId === moment.id ? "Скопировано" : "Копировать"}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleCopy(moment)}
-                  className="shrink-0 rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.1em] text-white/70 transition-colors hover:border-white/25"
-                >
-                  {copiedMomentId === moment.id ? "Скопировано" : "Копировать"}
-                </button>
+                <p className="mt-2 text-[10px] uppercase tracking-[0.08em] text-white/45">{formatDate(moment.created_at)} UTC+0</p>
               </div>
-              <p className="mt-2 text-[10px] uppercase tracking-[0.08em] text-white/45">
-                {formatDate(moment.created_at)} UTC+0
-              </p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </details>
       ) : null}
     </section>
   );

@@ -118,9 +118,9 @@ export default function ProfileRaceCard({ raceContext, weeklyTitles, auraPoints,
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <div className="rounded-2xl border border-neon-green/20 bg-black/20 p-3">
-          <p className="text-[10px] uppercase tracking-[0.08em] text-neon-green/80">Следующий tier</p>
+          <p className="text-[10px] uppercase tracking-[0.08em] text-neon-green/80">Следующий уровень</p>
           <p className="mt-2 text-sm font-black text-white">
-            {nextTier ? `${nextTier.label} через +${nextTier.threshold - auraPoints}` : "Максимальный tier уже открыт"}
+            {nextTier ? `${nextTier.label} через +${nextTier.threshold - auraPoints}` : "Максимальный уровень уже открыт"}
           </p>
           <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-white/50">
             {nextTier ? "Это ближайший большой визуальный апгрейд карточки." : "Сейчас важнее удерживать видимость и титулы."}

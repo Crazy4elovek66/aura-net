@@ -1,19 +1,24 @@
-import { ANONYMOUS_VOTE_COST, ANONYMOUS_VOTE_DAILY_LIMIT, VOTE_DAILY_LIMIT } from "../economy.ts";
+﻿import {
+  ANONYMOUS_VOTE_COST,
+  ANONYMOUS_VOTE_DAILY_LIMIT,
+  VOTE_DAILY_LIMIT,
+  VOTE_PAIR_COOLDOWN_HOURS,
+} from "../economy.ts";
 
-const FORBIDDEN_ERROR_MESSAGE = "РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РїСЂР°РІ.";
+const FORBIDDEN_ERROR_MESSAGE = "Недостаточно прав.";
 
 export const AI_COMMENTS = {
   up: [
-    "Р­С‚РѕС‚ РІР°Р№Р± РЅРµ РєСѓРїРёС‚СЊ. РџР»СЋСЃ Р°СѓСЂР° Р·Р°СЃР»СѓР¶РµРЅ.",
-    "РЎРёР»СЊРЅС‹Р№ С…РѕРґ. РџР»СЋСЃ СѓРІР°Р¶РµРЅРёРµ РІ РєРѕРїРёР»РєСѓ.",
-    "РЎС‚РёР»СЊ СЃС‡РёС‚С‹РІР°РµС‚СЃСЏ СЃСЂР°Р·Сѓ. РҐРѕСЂРѕС€РёР№ РїР»СЋСЃ.",
-    "Р­С‚Рѕ Р±С‹Р»Рѕ РјРѕС‰РЅРѕ. РђСѓСЂР° РїРѕС€Р»Р° РІРІРµСЂС….",
+    "Этот вайб не купить. Плюс аура заслужен.",
+    "Сильный ход. Плюс уважение в копилку.",
+    "Стиль считывается сразу. Хороший плюс.",
+    "Это было мощно. Аура пошла вверх.",
   ],
   down: [
-    "РЎРµРіРѕРґРЅСЏ РІР°Р№Р± РЅРµ РґРѕС‚СЏРЅСѓР».",
-    "РњРёРЅСѓСЃ Р°СѓСЂР°. РџРѕСЂР° РїРµСЂРµР·Р°СЂСЏРґРёС‚СЊСЃСЏ.",
-    "Р­С‚РѕС‚ Р·Р°С…РѕРґ РЅРµ СЃСЂР°Р±РѕС‚Р°Р».",
-    "РљСЂРёРЅР¶-С‡РµРє РЅРµ РїСЂРѕР№РґРµРЅ. РќСѓР¶РЅРѕ РІРѕР·РІСЂР°С‰РµРЅРёРµ.",
+    "Сегодня вайб не дотянул.",
+    "Минус аура. Пора перезарядиться.",
+    "Этот заход не сработал.",
+    "Кринж-чек не пройден. Нужно возвращение.",
   ],
 } as const;
 
@@ -24,16 +29,46 @@ export interface CastVoteRow {
   anonymous_votes_used?: number | null;
   voter_aura_left?: number | null;
   target_aura?: number | null;
+  next_available_at?: string | null;
+  cooldown_hours?: number | null;
 }
 
-export function mapVoteRpcError(message: string) {
+export interface VoteRpcErrorMapping {
+  status: number;
+  code: string;
+  error: string;
+  details?: Record<string, unknown>;
+}
+
+function extractCooldownIso(message: string): string | null {
+  const match = message.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/i);
+  return match?.[1] ?? null;
+}
+
+export function mapVoteRpcError(message: string): VoteRpcErrorMapping {
   const normalized = message.toLowerCase();
 
-  if (normalized.includes("already voted")) {
+  if (normalized.includes("vote cooldown active until")) {
+    const nextAvailableAt = extractCooldownIso(message);
+    return {
+      status: 429,
+      code: "VOTE_COOLDOWN_ACTIVE",
+      error: "За этот профиль можно голосовать повторно только после отката.",
+      details: {
+        nextAvailableAt,
+        cooldownHours: VOTE_PAIR_COOLDOWN_HOURS,
+      },
+    };
+  }
+
+  if (
+    normalized.includes("already voted") ||
+    (normalized.includes("duplicate key value") && normalized.includes("votes_voter_id_target_id_key"))
+  ) {
     return {
       status: 400,
       code: "ALREADY_VOTED",
-      error: "РўС‹ СѓР¶Рµ РіРѕР»РѕСЃРѕРІР°Р» Р·Р° СЌС‚РѕС‚ РїСЂРѕС„РёР»СЊ.",
+      error: "Ты уже голосовал за этот профиль.",
     };
   }
 
@@ -41,7 +76,7 @@ export function mapVoteRpcError(message: string) {
     return {
       status: 400,
       code: "SELF_VOTE_FORBIDDEN",
-      error: "Р“РѕР»РѕСЃРѕРІР°С‚СЊ Р·Р° СЃРµР±СЏ РЅРµР»СЊР·СЏ.",
+      error: "Голосовать за себя нельзя.",
     };
   }
 
@@ -49,7 +84,7 @@ export function mapVoteRpcError(message: string) {
     return {
       status: 429,
       code: "ANONYMOUS_DAILY_LIMIT_REACHED",
-      error: `Р›РёРјРёС‚ Р°РЅРѕРЅРёРјРЅС‹С… РіРѕР»РѕСЃРѕРІ РЅР° СЃРµРіРѕРґРЅСЏ РёСЃС‡РµСЂРїР°РЅ (${ANONYMOUS_VOTE_DAILY_LIMIT}/${ANONYMOUS_VOTE_DAILY_LIMIT}).`,
+      error: `Лимит анонимных голосов на сегодня исчерпан (${ANONYMOUS_VOTE_DAILY_LIMIT}/${ANONYMOUS_VOTE_DAILY_LIMIT}).`,
     };
   }
 
@@ -57,7 +92,7 @@ export function mapVoteRpcError(message: string) {
     return {
       status: 429,
       code: "VOTE_DAILY_LIMIT_REACHED",
-      error: `Р›РёРјРёС‚ РѕР±С‹С‡РЅС‹С… РіРѕР»РѕСЃРѕРІ РЅР° СЃРµРіРѕРґРЅСЏ РёСЃС‡РµСЂРїР°РЅ (${VOTE_DAILY_LIMIT}/${VOTE_DAILY_LIMIT}).`,
+      error: `Лимит обычных голосов на сегодня исчерпан (${VOTE_DAILY_LIMIT}/${VOTE_DAILY_LIMIT}).`,
     };
   }
 
@@ -65,7 +100,7 @@ export function mapVoteRpcError(message: string) {
     return {
       status: 403,
       code: "INSUFFICIENT_AURA",
-      error: `РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ Р°СѓСЂС‹ РґР»СЏ Р°РЅРѕРЅРёРјРЅРѕРіРѕ РіРѕР»РѕСЃР°. РќСѓР¶РЅРѕ ${ANONYMOUS_VOTE_COST}.`,
+      error: `Недостаточно ауры для анонимного голоса. Нужно ${ANONYMOUS_VOTE_COST}.`,
     };
   }
 
@@ -73,7 +108,7 @@ export function mapVoteRpcError(message: string) {
     return {
       status: 400,
       code: "INVALID_VOTE_PAYLOAD",
-      error: "РќРµРєРѕСЂСЂРµРєС‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РіРѕР»РѕСЃР°.",
+      error: "Некорректные данные голоса.",
     };
   }
 
@@ -89,7 +124,7 @@ export function mapVoteRpcError(message: string) {
     return {
       status: 404,
       code: "PROFILE_NOT_FOUND",
-      error: "РџСЂРѕС„РёР»СЊ РЅРµ РЅР°Р№РґРµРЅ.",
+      error: "Профиль не найден.",
     };
   }
 
@@ -97,14 +132,14 @@ export function mapVoteRpcError(message: string) {
     return {
       status: 501,
       code: "FUNCTION_MISSING",
-      error: "Р¤СѓРЅРєС†РёСЏ РіРѕР»РѕСЃРѕРІР°РЅРёСЏ РЅРµ РЅР°Р№РґРµРЅР°. РџСЂРёРјРµРЅРё Р°РєС‚СѓР°Р»СЊРЅС‹Рµ РјРёРіСЂР°С†РёРё.",
+      error: "Функция голосования не найдена. Примени актуальные миграции.",
     };
   }
 
   return {
     status: 500,
     code: "VOTE_CREATE_FAILED",
-    error: "РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РіРѕР»РѕСЃ.",
+    error: "Не удалось создать голос.",
   };
 }
 
@@ -119,6 +154,10 @@ export function buildVoteSuccessPayload(
   return {
     comment: aiComment,
     newAuraChange: Number(row.aura_change || 0),
+    cooldown: {
+      nextAvailableAt: row.next_available_at ?? null,
+      hours: Number(row.cooldown_hours || VOTE_PAIR_COOLDOWN_HOURS),
+    },
     limits: {
       regularUsed: Number(row.regular_votes_used || 0),
       regularLimit: VOTE_DAILY_LIMIT,
@@ -127,3 +166,4 @@ export function buildVoteSuccessPayload(
     },
   };
 }
+

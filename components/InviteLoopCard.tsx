@@ -1,6 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  REFERRAL_ACTIVITY_DAILY_CAP,
+  REFERRAL_ACTIVITY_DURATION_DAYS,
+  REFERRAL_ACTIVITY_PERCENT,
+} from "@/lib/economy";
 
 interface ReferralEntry {
   id: string;
@@ -53,17 +58,17 @@ function getReferralStage(referral: ReferralEntry) {
 
   if (referral.hasFirstClaim) {
     return {
-      key: "waiting_social_proof",
-      label: "Ждём social proof",
-      detail: "First claim уже есть. Теперь нужен любой живой social signal внутри продукта.",
+      key: "waiting_activity",
+      label: "Ждём активность",
+      detail: "Первый вход уже есть. Нужен живой социальный сигнал (голос), чтобы закрыть активацию.",
       accent: "border-neon-pink/35 bg-neon-pink/10 text-neon-pink",
     };
   }
 
   return {
-    key: "waiting_first_claim",
-    label: "Ждём first claim",
-    detail: "Друг уже привязался. Следующий шаг: первый daily claim, чтобы петля сдвинулась дальше.",
+    key: "waiting_first_entry",
+    label: "Ждём первый вход",
+    detail: "Друг уже привязался. Следующий шаг: первый ежедневный вход, чтобы петля сдвинулась дальше.",
     accent: "border-neon-purple/35 bg-neon-purple/10 text-neon-purple",
   };
 }
@@ -129,7 +134,8 @@ export default function InviteLoopCard({
         <div>
           <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Инвайт-петля</h2>
           <p className="mt-2 text-[11px] leading-relaxed text-white/55">
-            Здесь видно не только сколько друзей пришло, а на каком шаге они застряли и что должно случиться дальше.
+            Видно не только сколько друзей пришло, но и на каком шаге они остановились.
+            После активации включается мягкий процент с их социальной активности.
           </p>
         </div>
         <div className="rounded-2xl border border-neon-green/20 bg-neon-green/[0.06] px-3 py-2 text-right">
@@ -145,9 +151,11 @@ export default function InviteLoopCard({
           <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-white/40">После активации: +25 тебе и +10 другу</p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-          <p className="text-[10px] uppercase tracking-[0.1em] text-white/45">Как двигается loop</p>
+          <p className="text-[10px] uppercase tracking-[0.1em] text-white/45">Процент после активации</p>
           <p className="mt-2 text-[11px] leading-relaxed text-white/65">
-            Отправил ссылку → друг привязался → сделал first claim → дал social proof → активация закрыта.
+            Ты получаешь {REFERRAL_ACTIVITY_PERCENT}% с плюс-голосов приглашённого.
+            Лимит: до +{REFERRAL_ACTIVITY_DAILY_CAP} в сутки с одного приглашённого,
+            окно выплат: {REFERRAL_ACTIVITY_DURATION_DAYS} дней.
           </p>
         </div>
       </div>
@@ -158,11 +166,11 @@ export default function InviteLoopCard({
           <p className="mt-2 text-lg font-black text-white">{pendingCount + activatedCount}</p>
         </div>
         <div className="rounded-2xl border border-neon-purple/20 bg-black/20 p-3">
-          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Ждём claim</p>
+          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Ждём вход</p>
           <p className="mt-2 text-lg font-black text-neon-purple">{waitingFirstClaimCount}</p>
         </div>
         <div className="rounded-2xl border border-neon-pink/20 bg-black/20 p-3">
-          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Ждём proof</p>
+          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Ждём активность</p>
           <p className="mt-2 text-lg font-black text-neon-pink">{waitingSocialProofCount}</p>
         </div>
         <div className="rounded-2xl border border-neon-green/20 bg-black/20 p-3">
@@ -239,11 +247,11 @@ export default function InviteLoopCard({
           })
         ) : (
           <p className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-3 text-[11px] leading-relaxed text-white/55">
-            Пока никто не вошёл в loop. Первый хороший старт здесь обычно такой: отправляешь карточку с контекстом, затем сразу
-            даёшь ссылку на вход.
+            Пока никто не вошёл в петлю. Рабочий старт обычно такой: отправляешь карточку с контекстом, затем сразу даёшь ссылку на вход.
           </p>
         )}
       </div>
     </section>
   );
 }
+

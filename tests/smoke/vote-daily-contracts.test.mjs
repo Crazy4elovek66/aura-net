@@ -1,14 +1,20 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildDailyRewardSuccessPayload, mapDailyRewardRpcError } from "../../lib/server/daily-reward-flow.ts";
 import { buildVoteSuccessPayload, mapVoteRpcError } from "../../lib/server/vote-flow.ts";
 
 test("vote RPC errors map to stable response codes", () => {
+  assert.equal(mapVoteRpcError("vote cooldown active until 2026-04-12T18:00:00.000Z").code, "VOTE_COOLDOWN_ACTIVE");
+  assert.equal(
+    mapVoteRpcError("vote cooldown active until 2026-04-12T18:00:00.000Z").details?.nextAvailableAt,
+    "2026-04-12T18:00:00.000Z",
+  );
+
   assert.deepEqual(mapVoteRpcError("already voted today"), {
     status: 400,
     code: "ALREADY_VOTED",
-    error: "РўС‹ СѓР¶Рµ РіРѕР»РѕСЃРѕРІР°Р» Р·Р° СЌС‚РѕС‚ РїСЂРѕС„РёР»СЊ.",
+    error: "Ты уже голосовал за этот профиль.",
   });
 
   assert.equal(mapVoteRpcError("anonymous vote daily limit reached").code, "ANONYMOUS_DAILY_LIMIT_REACHED");
@@ -21,10 +27,13 @@ test("vote success payload keeps critical response shape", () => {
     aura_change: 7,
     regular_votes_used: 2,
     anonymous_votes_used: 1,
+    next_available_at: "2026-04-12T18:00:00.000Z",
+    cooldown_hours: 12,
   });
 
   assert.equal(typeof payload.comment, "string");
   assert.equal(payload.newAuraChange, 7);
+  assert.deepEqual(Object.keys(payload.cooldown), ["nextAvailableAt", "hours"]);
   assert.deepEqual(Object.keys(payload.limits), [
     "regularUsed",
     "regularLimit",
@@ -34,11 +43,9 @@ test("vote success payload keeps critical response shape", () => {
 });
 
 test("daily reward RPC errors map to stable response codes", () => {
-  assert.deepEqual(mapDailyRewardRpcError("Profile not found for id 1"), {
-    status: 404,
-    message: "РџСЂРѕС„РёР»СЊ РЅРµ РЅР°Р№РґРµРЅ.",
-    code: "PROFILE_NOT_FOUND",
-  });
+  const notFound = mapDailyRewardRpcError("Profile not found for id 1");
+  assert.equal(notFound.status, 404);
+  assert.equal(notFound.code, "PROFILE_NOT_FOUND");
 
   assert.equal(mapDailyRewardRpcError("permission denied").code, "FORBIDDEN");
   assert.equal(mapDailyRewardRpcError("claim_daily_reward function does not exist").status, 501);
@@ -65,3 +72,4 @@ test("daily reward success payload keeps economy response shape", () => {
   assert.deepEqual(Object.keys(payload.bonuses), ["streakMilestone", "weeklyActivity", "achievements"]);
   assert.deepEqual(payload.unlockedAchievements, ["streak_3", "weekly_1"]);
 });
+

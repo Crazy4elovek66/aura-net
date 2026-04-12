@@ -1,11 +1,14 @@
 import AuraTransactions from "@/components/AuraTransactions";
+import InviteLoopCard from "@/components/InviteLoopCard";
 import LeaderboardPreview from "@/components/LeaderboardPreview";
 import MyCircleCard from "@/components/MyCircleCard";
 import ProfileRaceCard from "@/components/ProfileRaceCard";
 import ReengagementEventsCard from "@/components/ReengagementEventsCard";
 import ReturnPulseCard from "@/components/ReturnPulseCard";
+import ShareButton from "@/components/ShareButton";
 import ShareableMomentsCard from "@/components/ShareableMomentsCard";
 import { createClient } from "@/lib/supabase/server";
+import CopyLink from "./CopyLink";
 
 interface GrowthLeaderRow {
   user_id: string;
@@ -113,6 +116,8 @@ export default async function ProfileSecondaryPanels({
   displayName,
   profileShareLink,
   inviteLink,
+  inviteCode,
+  telegramInviteLink,
   referrals,
 }: {
   userId: string;
@@ -123,6 +128,8 @@ export default async function ProfileSecondaryPanels({
   displayName: string;
   profileShareLink: string;
   inviteLink: string | null;
+  inviteCode: string | null;
+  telegramInviteLink: string | null;
   referrals: ReferralEntry[];
 }) {
   const supabase = await createClient();
@@ -313,10 +320,10 @@ export default async function ProfileSecondaryPanels({
         const referral = referrals.find((entry) => entry.inviteeId === row.id);
         relationLabel =
           referral?.status === "activated"
-            ? "ты пригласил, loop уже закрылся"
+            ? "ты пригласил, петля уже закрылась"
             : referral?.hasFirstClaim
-              ? "ты пригласил, ждём social proof"
-              : "ты пригласил, ждём первый claim";
+              ? "ты пригласил, ждём активность"
+              : "ты пригласил, ждём первый вход";
       }
 
       return {
@@ -333,9 +340,17 @@ export default async function ProfileSecondaryPanels({
 
   const activatedInvites = referrals.filter((entry) => entry.status === "activated").length;
   const pendingInvites = referrals.filter((entry) => entry.status === "pending").length;
+  const momentsCount = (shareableMomentsResult.data as ShareableMomentRow[] | null)?.length || 0;
 
   return (
     <>
+      <ProfileRaceCard
+        raceContext={raceContext}
+        weeklyTitles={weeklyTitles}
+        auraPoints={auraPoints}
+        dailyStreak={dailyStreak}
+      />
+
       <ReturnPulseCard
         trackedAt={trackedAt}
         currentRank={raceContext?.rank ?? null}
@@ -346,32 +361,78 @@ export default async function ProfileSecondaryPanels({
         activatedReferrals={activatedReferralsSinceTracked}
         pendingEvents={pendingEvents}
       />
-      <MyCircleCard
-        circleProfiles={circleProfiles}
-        activatedInvites={activatedInvites}
-        pendingInvites={pendingInvites}
-      />
-      <ProfileRaceCard
-        raceContext={raceContext}
-        weeklyTitles={weeklyTitles}
-        auraPoints={auraPoints}
-        dailyStreak={dailyStreak}
-      />
-      <ReengagementEventsCard events={(reengagementEventsResult.data as NotificationEventRow[] | null) || []} />
-      <ShareableMomentsCard
-        moments={(shareableMomentsResult.data as ShareableMomentRow[] | null) || []}
-        username={profileUsername}
-        displayName={displayName}
-        profileShareLink={profileShareLink}
-        inviteLink={inviteLink}
-      />
-      <LeaderboardPreview
-        auraLeaders={auraLeaders}
-        growthLeaders={growthLeaders}
-        spotlightLeaders={spotlightLeaders}
-        currentUserId={userId}
-      />
-      <AuraTransactions transactions={transactionsResult.data || []} />
+
+      <details className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-4 backdrop-blur-md">
+        <summary className="list-none cursor-pointer">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/72">Круг и инвайты</p>
+              <p className="mt-1 text-[11px] text-white/52">Кто в твоём круге и на каком шаге стоит приглашение.</p>
+            </div>
+            <p className="text-sm font-black text-neon-green">{activatedInvites + pendingInvites}</p>
+          </div>
+        </summary>
+        <div className="mt-3 space-y-4">
+          <MyCircleCard
+            circleProfiles={circleProfiles}
+            activatedInvites={activatedInvites}
+            pendingInvites={pendingInvites}
+          />
+          <InviteLoopCard
+            inviteCode={inviteCode}
+            webInviteLink={inviteLink}
+            telegramInviteLink={telegramInviteLink}
+            referrals={referrals}
+          />
+        </div>
+      </details>
+
+      <details className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-4 backdrop-blur-md">
+        <summary className="list-none cursor-pointer">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/72">Публикация и шэринг</p>
+              <p className="mt-1 text-[11px] text-white/52">Готовые поводы, ссылка и карточка для сторис.</p>
+            </div>
+            <p className="text-sm font-black text-neon-purple">{momentsCount}</p>
+          </div>
+        </summary>
+        <div className="mt-3 space-y-4">
+          <ShareableMomentsCard
+            moments={(shareableMomentsResult.data as ShareableMomentRow[] | null) || []}
+            username={profileUsername}
+            displayName={displayName}
+            profileShareLink={profileShareLink}
+            inviteLink={inviteLink}
+          />
+          <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/20 p-4">
+            <CopyLink link={profileShareLink} />
+            <ShareButton username={profileUsername} />
+          </div>
+        </div>
+      </details>
+
+      <details className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-4 backdrop-blur-md">
+        <summary className="list-none cursor-pointer">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/72">Аналитика и события</p>
+              <p className="mt-1 text-[11px] text-white/52">Очередь касаний, лидеры и история баланса.</p>
+            </div>
+            <p className="text-sm font-black text-white/75">3 блока</p>
+          </div>
+        </summary>
+        <div className="mt-3 space-y-4">
+          <ReengagementEventsCard events={(reengagementEventsResult.data as NotificationEventRow[] | null) || []} />
+          <LeaderboardPreview
+            auraLeaders={auraLeaders}
+            growthLeaders={growthLeaders}
+            spotlightLeaders={spotlightLeaders}
+            currentUserId={userId}
+          />
+          <AuraTransactions transactions={transactionsResult.data || []} />
+        </div>
+      </details>
     </>
   );
 }

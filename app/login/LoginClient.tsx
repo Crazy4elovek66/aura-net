@@ -149,17 +149,17 @@ export default function LoginClient({
 
       notify({
         variant: "success",
-        title: "Dev login",
-        message: "Session created. Redirecting...",
+        title: "Тестовый вход",
+        message: "Сессия создана. Перенаправляем...",
       });
 
       window.location.replace(payload.redirectTo);
     } catch (devLoginError: unknown) {
-      const message = getErrorMessage(devLoginError, "Dev login failed");
-      setError(`Dev login error: ${message}`);
+      const message = getErrorMessage(devLoginError, "Тестовый вход не выполнен");
+      setError(`Ошибка тестового входа: ${message}`);
       notify({
         variant: "error",
-        title: "Dev login failed",
+        title: "Тестовый вход не выполнен",
         message,
       });
     } finally {
@@ -318,8 +318,8 @@ export default function LoginClient({
             <div className="mb-6 rounded-2xl border border-neon-green/25 bg-neon-green/[0.08] p-4 text-left">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neon-green/90">Вход по приглашению</p>
               <p className="mt-2 text-[11px] leading-relaxed text-white/72">
-                Инвайт уже подхватится автоматически. После первого daily claim и первого живого действия внутри продукта
-                активируется welcome bonus для тебя и reward для пригласившего.
+                Инвайт уже подхватится автоматически. После первого ежедневного входа и первого живого действия внутри
+                продукта активируется бонус для тебя и награда для пригласившего.
               </p>
             </div>
           ) : null}
@@ -365,7 +365,7 @@ export default function LoginClient({
               <div className="w-full rounded-2xl border border-neon-green/30 bg-neon-green/10 p-4 text-left">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neon-green">Dev login for localhost</p>
                 <p className="mt-2 text-[11px] leading-relaxed text-white/72">
-                  Uses preconfigured test account and creates a normal Supabase session.
+                  Использует тестовый аккаунт и создаёт обычную Supabase-сессию.
                 </p>
                 <button
                   type="button"
@@ -375,7 +375,7 @@ export default function LoginClient({
                   disabled={devLoginLoading}
                   className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-neon-green/45 bg-neon-green/18 px-4 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-neon-green transition-all hover:bg-neon-green/22 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {devLoginLoading ? "Signing in..." : "Enter test account"}
+                  {devLoginLoading ? "Входим..." : "Войти в тестовый аккаунт"}
                 </button>
               </div>
             ) : null}

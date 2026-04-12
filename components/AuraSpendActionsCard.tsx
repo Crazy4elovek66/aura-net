@@ -66,6 +66,7 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [state, setState] = useState(initialState);
   const [isRefreshing, startRefreshTransition] = useTransition();
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   useEffect(() => {
     setState(initialState);
@@ -188,8 +189,19 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
 
   return (
     <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
-      <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Траты ауры</h2>
-      <p className="mt-1 text-[11px] text-white/45">Осмысленные действия с лимитами и сроком действия.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Траты ауры</h2>
+          <p className="mt-1 text-[11px] text-white/45">Осмысленные действия с лимитами и сроком действия.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsPreviewOpen(true)}
+          className="rounded-xl border border-white/15 bg-white/[0.03] px-3 py-2 text-[10px] font-black uppercase tracking-[0.1em] text-white/75 transition-colors hover:border-white/25"
+        >
+          Посмотреть эффекты
+        </button>
+      </div>
 
       <div className="mt-4 space-y-3">
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
@@ -280,31 +292,44 @@ export default function AuraSpendActionsCard({ profileId, initialState }: AuraSp
         </div>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-3">
-        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/80">Как это выглядит</p>
-        <p className="mt-1 text-[10px] text-white/50">
-          Временные визуальные элементы: «Фокус» в лидерборде и акцент рамки карточки профиля.
-        </p>
+      {isRefreshing && <p className="mt-3 text-[10px] uppercase tracking-[0.08em] text-white/45">Обновляем профиль…</p>}
 
-        <div className="mt-3 rounded-xl border border-neon-pink/30 bg-neon-pink/5 p-2">
-          <p className="text-[10px] font-black uppercase tracking-[0.08em] text-neon-pink">Фокус</p>
-          <p className="mt-1 text-[10px] text-white/55">Профиль попадает в вкладку «В фокусе» и выделяется меткой времени.</p>
-        </div>
-
-        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {CARD_ACCENT_VARIANTS.map((variant) => (
-            <div key={`preview-${variant}`} className="rounded-xl border border-white/10 bg-black/30 p-2">
-              <p className="text-[9px] uppercase tracking-[0.08em] text-white/60">Акцент</p>
-              <div className={`mt-2 h-10 rounded-lg border ${getAccentPreviewClass(variant)} bg-white/[0.03]`} />
-              <p className="mt-2 text-[10px] font-black uppercase tracking-[0.08em] text-white/80">{ACCENT_LABELS[variant]}</p>
+      {isPreviewOpen ? (
+        <div className="fixed inset-0 z-[220] bg-black/85 backdrop-blur-sm p-4 flex items-center justify-center" role="dialog" aria-modal="true">
+          <div className="w-full max-w-xl rounded-3xl border border-white/15 bg-black/90 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/75">Предпросмотр эффектов</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-white/55">
+                  Эффекты применяются только на ограниченное время. Здесь можно быстро оценить стиль перед покупкой.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPreviewOpen(false)}
+                className="rounded-xl border border-white/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.1em] text-white/75 hover:border-white/35"
+              >
+                Закрыть
+              </button>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {isRefreshing && (
-        <p className="mt-3 text-[10px] uppercase tracking-[0.08em] text-white/45">Обновляем профиль…</p>
-      )}
+            <div className="mt-4 rounded-xl border border-neon-pink/30 bg-neon-pink/5 p-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-neon-pink">Фокус</p>
+              <p className="mt-1 text-[10px] text-white/55">Профиль попадает во вкладку «В фокусе» и выделяется меткой времени.</p>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {CARD_ACCENT_VARIANTS.map((variant) => (
+                <div key={`preview-${variant}`} className="rounded-xl border border-white/10 bg-black/30 p-2">
+                  <p className="text-[9px] uppercase tracking-[0.08em] text-white/60">Акцент</p>
+                  <div className={`mt-2 h-10 rounded-lg border ${getAccentPreviewClass(variant)} bg-white/[0.03]`} />
+                  <p className="mt-2 text-[10px] font-black uppercase tracking-[0.08em] text-white/80">{ACCENT_LABELS[variant]}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

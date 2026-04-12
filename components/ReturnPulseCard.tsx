@@ -45,11 +45,11 @@ export default function ReturnPulseCard({
     <section className="w-full max-w-xl rounded-3xl border border-neon-green/25 bg-neon-green/[0.07] p-5 backdrop-blur-md">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-neon-green/90">Return pulse</h2>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-neon-green/90">Что изменилось</h2>
           <p className="mt-2 text-[11px] leading-relaxed text-white/70">
             {hasTrackedState
-              ? `Что успело измениться с последнего трекнутого состояния от ${formatDate(trackedAt)} UTC+0.`
-              : "Первый заметный срез ещё не накоплен. После следующего круга здесь появится понятная дельта."}
+              ? `Сводка с последнего трека от ${formatDate(trackedAt)} UTC+0.`
+              : "Первый заметный срез ещё не накоплен. После следующего цикла появится понятная дельта."}
           </p>
         </div>
         <div className="rounded-2xl border border-neon-green/20 bg-black/20 px-3 py-2 text-right">
@@ -60,38 +60,48 @@ export default function ReturnPulseCard({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-4">
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Ранг</p>
-          <p className="mt-2 text-lg font-black text-white">
-            {currentRank ? `#${currentRank}` : "—"}
-          </p>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-white/45">
-            {rankShift === null ? "без истории" : rankShift > 0 ? `поднялся на ${rankShift}` : rankShift < 0 ? `просел на ${Math.abs(rankShift)}` : "без смены"}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Достижения</p>
-          <p className="mt-2 text-lg font-black text-white">{newAchievements}</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Моменты</p>
-          <p className="mt-2 text-lg font-black text-white">{newMoments}</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Инвайт loop</p>
-          <p className="mt-2 text-lg font-black text-white">{activatedReferrals}</p>
-        </div>
-      </div>
+      <details className="group mt-3 rounded-2xl border border-white/10 bg-black/20">
+        <summary className="list-none cursor-pointer px-4 py-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.1em] text-white/70">Показать детали</p>
+        </summary>
 
-      <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
-        <p className="text-[10px] uppercase tracking-[0.1em] text-white/45">Что ждёт тебя сейчас</p>
-        <p className="mt-2 text-[11px] leading-relaxed text-white/68">
-          {pendingEvents > 0
-            ? `В очереди ещё ${pendingEvents} событий. Есть повод вернуться к карточке, моментам и гонке прямо сейчас.`
-            : "Очередь тихая: значит, главный фокус сейчас в гонке, новых голосах и движении твоего круга."}
-        </p>
-      </div>
+        <div className="grid gap-2 px-3 pb-3 sm:grid-cols-4">
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+            <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Ранг</p>
+            <p className="mt-2 text-lg font-black text-white">{currentRank ? `#${currentRank}` : "—"}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-white/45">
+              {rankShift === null
+                ? "без истории"
+                : rankShift > 0
+                  ? `поднялся на ${rankShift}`
+                  : rankShift < 0
+                    ? `просел на ${Math.abs(rankShift)}`
+                    : "без смены"}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+            <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Достижения</p>
+            <p className="mt-2 text-lg font-black text-white">{newAchievements}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+            <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Моменты</p>
+            <p className="mt-2 text-lg font-black text-white">{newMoments}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+            <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Инвайт-петля</p>
+            <p className="mt-2 text-lg font-black text-white">{activatedReferrals}</p>
+          </div>
+        </div>
+
+        <div className="mx-3 mb-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+          <p className="text-[10px] uppercase tracking-[0.1em] text-white/45">Что ждёт тебя сейчас</p>
+          <p className="mt-2 text-[11px] leading-relaxed text-white/68">
+            {pendingEvents > 0
+              ? `В очереди ещё ${pendingEvents} событий. Есть повод вернуться к карточке, моментам и гонке прямо сейчас.`
+              : "Очередь тихая: главный фокус сейчас в гонке, новых голосах и движении твоего круга."}
+          </p>
+        </div>
+      </details>
     </section>
   );
 }

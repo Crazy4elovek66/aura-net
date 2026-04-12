@@ -25,6 +25,7 @@ interface AuraCardProps {
   cardAccent?: string | null;
   cardAccentUntil?: string | null;
   hasVoted?: boolean;
+  voteCooldownUntil?: string | null;
 }
 
 const supabase = createClient();
@@ -71,6 +72,7 @@ export default function AuraCard({
   cardAccent = null,
   cardAccentUntil = null,
   hasVoted: initialHasVoted = false,
+  voteCooldownUntil: initialVoteCooldownUntil = null,
   canManageSpecialCard = false,
   isOwner = false,
 }: AuraCardProps & { isOwner?: boolean }) {
@@ -78,7 +80,17 @@ export default function AuraCard({
   const [upVotes, setUpVotes] = useState(initialUp);
   const [downVotes, setDownVotes] = useState(initialDown);
   const [votePendingType, setVotePendingType] = useState<"up" | "down" | null>(null);
-  const [hasVoted, setHasVoted] = useState(initialHasVoted);
+  const [legacyVoteLocked, setLegacyVoteLocked] = useState(initialHasVoted);
+  const [voteCooldownUntilMs, setVoteCooldownUntilMs] = useState<number | null>(
+    typeof initialVoteCooldownUntil === "string" && initialVoteCooldownUntil
+      ? new Date(initialVoteCooldownUntil).getTime()
+      : null,
+  );
+  const [voteClockMs, setVoteClockMs] = useState<number>(
+    typeof initialVoteCooldownUntil === "string" && initialVoteCooldownUntil
+      ? new Date(initialVoteCooldownUntil).getTime()
+      : 0,
+  );
   const [isEditing, setIsEditing] = useState(false);
   const [currentDisplayName, setCurrentDisplayName] = useState(displayName);
   const [editValue, setEditValue] = useState(displayName);
@@ -91,6 +103,13 @@ export default function AuraCard({
   const isEditingRef = useRef(false);
   const { notify } = useNotice();
   const tier = getAuraTier(auraPoints);
+  const isVoteCooldownActive = voteCooldownUntilMs !== null && voteCooldownUntilMs > voteClockMs;
+  const isVoteLocked = legacyVoteLocked || isVoteCooldownActive;
+  const voteCooldownHint = isVoteCooldownActive
+    ? `Следующий голос: ${new Date(voteCooldownUntilMs).toLocaleString("ru-RU")}`
+    : legacyVoteLocked
+      ? "Голос уже учтен"
+      : null;
 
   useEffect(() => {
     isEditingRef.current = isEditing;
@@ -109,8 +128,28 @@ export default function AuraCard({
   }, [initialDown]);
 
   useEffect(() => {
-    setHasVoted(initialHasVoted);
+    setLegacyVoteLocked(initialHasVoted);
   }, [initialHasVoted]);
+
+  useEffect(() => {
+    if (typeof initialVoteCooldownUntil !== "string" || !initialVoteCooldownUntil) {
+      setVoteCooldownUntilMs(null);
+      return;
+    }
+
+    const nextMs = new Date(initialVoteCooldownUntil).getTime();
+    setVoteCooldownUntilMs(Number.isNaN(nextMs) ? null : nextMs);
+  }, [initialVoteCooldownUntil]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setVoteClockMs(Date.now());
+    }, 30_000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     setStatus(initialStatus);
@@ -201,10 +240,21 @@ export default function AuraCard({
 
   const isDuplicateVoteError = (message: string) => {
     const normalized = message.toLowerCase();
-    return normalized.includes("уже голосовал") || normalized.includes("already voted");
+    return (
+      normalized.includes("уже голосовал") ||
+      normalized.includes("already voted") ||
+      normalized.includes("cooldown")
+    );
   };
 
-  const applyConfirmedVote = (type: "up" | "down", rawAuraChange: unknown) => {
+  const formatCooldownTime = (iso: unknown): string | null => {
+    if (typeof iso !== "string" || !iso) return null;
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleString("ru-RU");
+  };
+
+  const applyConfirmedVote = (type: "up" | "down", rawAuraChange: unknown, rawNextAvailableAt?: unknown) => {
     const fallbackAuraChange = type === "up" ? 10 : -10;
     const parsedAuraChange = typeof rawAuraChange === "number" ? rawAuraChange : Number(rawAuraChange);
     const confirmedAuraChange = Number.isFinite(parsedAuraChange) ? parsedAuraChange : fallbackAuraChange;
@@ -217,11 +267,18 @@ export default function AuraCard({
       setDownVotes((prev) => prev + 1);
     }
 
-    setHasVoted(true);
+    if (typeof rawNextAvailableAt === "string" && rawNextAvailableAt) {
+      const nextMs = new Date(rawNextAvailableAt).getTime();
+      setVoteCooldownUntilMs(Number.isNaN(nextMs) ? null : nextMs);
+      setLegacyVoteLocked(false);
+      return;
+    }
+
+    setLegacyVoteLocked(true);
   };
 
   const handleVote = async (type: "up" | "down") => {
-    if (votePendingType || hasVoted || loading) return;
+    if (votePendingType || isVoteLocked || loading) return;
 
     setVotePendingType(type);
     try {
@@ -281,21 +338,34 @@ export default function AuraCard({
           body: JSON.stringify({ targetId: profileId, type, isAnonymous: true }),
         });
 
-        const votePayload = await voteResponse.json().catch(() => ({}));
+        const votePayload = await voteResponse.json().catch(() => ({})) as {
+          error?: string;
+          nextAvailableAt?: string | null;
+          newAuraChange?: number;
+          cooldown?: { nextAvailableAt?: string | null };
+        };
         if (!voteResponse.ok) {
           const errorMessage = String(votePayload.error || "Не удалось отправить голос");
-          if (isDuplicateVoteError(errorMessage)) {
-            setHasVoted(true);
+          const nextAvailableAtRaw = votePayload.nextAvailableAt || votePayload.cooldown?.nextAvailableAt || null;
+          const nextAvailableAtText = formatCooldownTime(nextAvailableAtRaw);
+          if (typeof nextAvailableAtRaw === "string" && nextAvailableAtRaw) {
+            const nextMs = new Date(nextAvailableAtRaw).getTime();
+            if (!Number.isNaN(nextMs)) {
+              setVoteCooldownUntilMs(nextMs);
+              setLegacyVoteLocked(false);
+            }
+          } else if (isDuplicateVoteError(errorMessage)) {
+            setLegacyVoteLocked(true);
           }
           notify({
             variant: "error",
             title: "Голос не отправлен",
-            message: errorMessage,
+            message: nextAvailableAtText ? `${errorMessage} Следующий голос будет доступен: ${nextAvailableAtText}.` : errorMessage,
           });
           return;
         }
 
-        applyConfirmedVote(type, votePayload.newAuraChange);
+        applyConfirmedVote(type, votePayload.newAuraChange, votePayload.cooldown?.nextAvailableAt || votePayload.nextAvailableAt);
         notify({
           variant: "success",
           title: "Анонимный голос принят",
@@ -312,21 +382,34 @@ export default function AuraCard({
         body: JSON.stringify({ targetId: profileId, type }),
       });
 
-      const payload = await response.json().catch(() => ({}));
+      const payload = await response.json().catch(() => ({})) as {
+        error?: string;
+        nextAvailableAt?: string | null;
+        newAuraChange?: number;
+        cooldown?: { nextAvailableAt?: string | null };
+      };
       if (!response.ok) {
         const errorMessage = String(payload.error || "Не удалось отправить голос");
-        if (isDuplicateVoteError(errorMessage)) {
-          setHasVoted(true);
+        const nextAvailableAtRaw = payload.nextAvailableAt || payload.cooldown?.nextAvailableAt || null;
+        const nextAvailableAtText = formatCooldownTime(nextAvailableAtRaw);
+        if (typeof nextAvailableAtRaw === "string" && nextAvailableAtRaw) {
+          const nextMs = new Date(nextAvailableAtRaw).getTime();
+          if (!Number.isNaN(nextMs)) {
+            setVoteCooldownUntilMs(nextMs);
+            setLegacyVoteLocked(false);
+          }
+        } else if (isDuplicateVoteError(errorMessage)) {
+          setLegacyVoteLocked(true);
         }
         notify({
           variant: "error",
           title: "Голос не отправлен",
-          message: errorMessage,
+          message: nextAvailableAtText ? `${errorMessage} Следующий голос будет доступен: ${nextAvailableAtText}.` : errorMessage,
         });
         return;
       }
 
-      applyConfirmedVote(type, payload.newAuraChange);
+      applyConfirmedVote(type, payload.newAuraChange, payload.cooldown?.nextAvailableAt || payload.nextAvailableAt);
     } catch (error) {
       console.error(error);
       notify({
@@ -423,6 +506,7 @@ export default function AuraCard({
         <UniversalCreatorCard
           data={universalData}
           tier={tierId}
+          cardAccentVariant={activeCardAccent === "NEON_EDGE" || activeCardAccent === "GOLD_PULSE" || activeCardAccent === "FROST_RING" ? activeCardAccent : null}
           isOwner={isOwner}
           isEditing={isEditing}
           editValue={editValue}
@@ -445,7 +529,8 @@ export default function AuraCard({
           onAuraPlus={() => handleVote("up")}
           onAuraMinus={() => handleVote("down")}
           votePendingType={votePendingType}
-          hasVoted={hasVoted}
+          hasVoted={isVoteLocked}
+          voteLockHint={voteCooldownHint}
         >
           <div className="absolute inset-0 z-0 pointer-events-none">
             {tier.id === "SIGMA" && (
@@ -484,16 +569,6 @@ export default function AuraCard({
             {isSpecialAdmin && <Slot00Background />}
           </div>
         </UniversalCreatorCard>
-
-        {activeCardAccent === "NEON_EDGE" && (
-          <div className="pointer-events-none absolute inset-[0.35rem] rounded-[3.3rem] border border-fuchsia-300/80 shadow-[0_0_25px_rgba(232,121,249,0.55)]" />
-        )}
-        {activeCardAccent === "GOLD_PULSE" && (
-          <div className="pointer-events-none absolute inset-[0.35rem] rounded-[3.3rem] border border-amber-300/80 shadow-[0_0_28px_rgba(252,211,77,0.55)] animate-pulse" />
-        )}
-        {activeCardAccent === "FROST_RING" && (
-          <div className="pointer-events-none absolute inset-[0.35rem] rounded-[3.3rem] border border-cyan-300/80 shadow-[0_0_24px_rgba(103,232,249,0.55)]" />
-        )}
       </div>
 
       {(spotlightActive || decayShieldActive || cardAccentActive) && (
