@@ -578,11 +578,17 @@ export default function QASection({ mode, username, profileId, isLoggedIn, isAdm
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                {questions.map((q) => (
-                  <div
-                    key={q.id}
-                    className="rounded-3xl border border-white/10 bg-black/35 p-5 backdrop-blur-md flex flex-col gap-3"
-                  >
+                <AnimatePresence mode="popLayout">
+                  {questions.map((q) => (
+                    <motion.div
+                      key={q.id}
+                      layout
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ type: "spring", damping: 25, stiffness: 250 }}
+                      className="rounded-3xl border border-white/10 bg-black/35 p-5 backdrop-blur-md flex flex-col gap-3"
+                    >
                     {/* Шапка: Отправитель и Дата */}
                     <div className="flex justify-between items-center text-xs text-white/40">
                       <div className="flex items-center gap-1.5">
@@ -687,8 +693,9 @@ export default function QASection({ mode, username, profileId, isLoggedIn, isAdm
                         </div>
                       </div>
                     )}
-                  </div>
+                  </motion.div>
                 ))}
+                </AnimatePresence>
               </div>
             )}
           </div>
