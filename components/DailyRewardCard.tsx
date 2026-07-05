@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -33,15 +33,6 @@ interface ClaimBreakdown {
 
 const STREAK_MILESTONES = [3, 7, 14, 30];
 
-function formatDate(iso: string) {
-  if (!iso) return "-";
-  return new Date(iso).toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export default function DailyRewardCard({ initialState }: DailyRewardCardProps) {
   const router = useRouter();
@@ -148,119 +139,73 @@ export default function DailyRewardCard({ initialState }: DailyRewardCardProps) 
       setLoading(false);
     }
   };
-
   return (
-    <section id="daily-reward-card" className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-5">
-      <div className="flex items-start justify-between gap-4">
+    <section id="daily-reward-card" className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md p-4">
+      {/* Шапка: Серия, награда и следующий бонус */}
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Награда дня</h2>
-          <p className="text-[11px] text-white/45 mt-1 uppercase tracking-[0.08em]">Серия: {state.streak} дн.</p>
-          <p className="text-[10px] text-white/50 mt-1 uppercase tracking-[0.08em]">
-            Следующий рубеж: {nextMilestone} дн. {toNextMilestone > 0 ? `(+${toNextMilestone})` : "достигнут"}
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[10px] text-white/45 uppercase tracking-[0.08em]">Серия: {state.streak} дн.</span>
+            <span className="text-[10px] text-white/30">•</span>
+            <span className="text-[9px] text-white/40 uppercase tracking-[0.08em]">
+              Рубеж: {nextMilestone} дн. {toNextMilestone > 0 ? `(+${toNextMilestone})` : ""}
+            </span>
+          </div>
         </div>
         <div className="text-right">
-          <p className="text-[10px] uppercase tracking-[0.12em] text-white/40">Следующий бонус</p>
-          <p className="text-sm font-black text-neon-green">
+          <span className="text-[9px] uppercase tracking-[0.12em] text-white/40 block">Бонус завтра</span>
+          <span className="text-xs font-black text-neon-green">
             +{state.nextReward} {capReached ? "макс" : ""}
-          </p>
+          </span>
         </div>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-        <p className="text-[11px] text-white/75">
-          {state.canClaim
-            ? `Можно забрать +${state.rewardToday} ауры`
-            : `Забрать снова: ${formatDate(state.availableAt)} (UTC+0)`}
-        </p>
-
-        {state.streakWillReset && state.canClaim && (
-          <p className="mt-2 text-[10px] text-neon-pink/90 uppercase tracking-[0.08em]">
-            Серия сбилась. После получения старт пойдет с 1 дня.
-          </p>
-        )}
-
-        <div className="mt-3 rounded-xl border border-white/10 bg-black/25 p-3">
-          <p className="text-[10px] uppercase tracking-[0.1em] text-white/50">Рубежи серии</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {STREAK_MILESTONES.map((milestone) => {
-              const reached = state.streak >= milestone;
-              const isNext = !reached && milestone === nextMilestone;
-
-              return (
-                <span
-                  key={milestone}
-                  className={[
-                    "rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.1em]",
-                    reached
-                      ? "border-neon-green/45 bg-neon-green/10 text-neon-green"
-                      : isNext
-                        ? "border-neon-purple/45 bg-neon-purple/10 text-neon-purple"
-                        : "border-white/15 bg-white/[0.03] text-white/55",
-                  ].join(" ")}
-                >
-                  {milestone} дн.
-                </span>
-              );
-            })}
+      {/* Компактный контент */}
+      <div className="mt-2.5 pt-2.5 border-t border-white/[0.04] flex flex-col gap-2">
+        {/* Недельный прогресс */}
+        <div className="flex flex-col gap-1">
+          <div className="flex justify-between items-center text-[9px] uppercase tracking-[0.08em] text-white/40">
+            <span>Цель недели: {weeklyProgress}/{weeklyTarget} дн.</span>
+            {weeklyProgress >= weeklyTarget && <span className="text-neon-pink">Бонус готов</span>}
           </div>
-        </div>
-
-        <div className="mt-3 rounded-xl border border-white/10 bg-black/25 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] uppercase tracking-[0.1em] text-white/50">Недельная цель</p>
-            <p className="text-[10px] font-black uppercase tracking-[0.1em] text-neon-pink">
-              {weeklyProgress}/{weeklyTarget}
-            </p>
-          </div>
-          <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
+          <div className="h-[2px] w-full rounded-full bg-white/10 overflow-hidden">
             <div className="h-full bg-neon-pink transition-all duration-300" style={{ width: `${weeklyProgressPercent}%` }} />
           </div>
-          <p className="mt-2 text-[10px] uppercase tracking-[0.08em] text-white/50">
-            {weeklyProgress >= weeklyTarget
-              ? "Цель недели закрыта. Держи ритм и забирай награду каждый день."
-              : `До бонуса недели: ещё ${weeklyTarget - weeklyProgress} дней.`}
-          </p>
         </div>
 
+        {/* Уведомления об ошибках и сбросах */}
+        {state.streakWillReset && state.canClaim && (
+          <p className="text-[9px] text-neon-pink/90 uppercase tracking-[0.08em]">
+            Внимание: сегодня последний шанс продлить серию!
+          </p>
+        )}
+
         {lastClaim && (
-          <div className="mt-2 space-y-1">
-            <p className="text-[10px] text-neon-green uppercase tracking-[0.08em]">Зачислено: +{lastClaim.total} ауры</p>
-            {lastClaim.bonus > 0 && (
-              <p className="text-[10px] text-white/75 uppercase tracking-[0.08em]">Бонус активности: +{lastClaim.bonus}</p>
-            )}
-            {lastClaim.streakMilestone > 0 && (
-              <p className="text-[10px] text-white/60 uppercase tracking-[0.08em]">Рубеж серии: +{lastClaim.streakMilestone}</p>
-            )}
-            {lastClaim.weeklyActivity > 0 && (
-              <p className="text-[10px] text-white/60 uppercase tracking-[0.08em]">Недельная активность: +{lastClaim.weeklyActivity}</p>
-            )}
-            {lastClaim.achievements > 0 && (
-              <p className="text-[10px] text-white/60 uppercase tracking-[0.08em]">Достижения: +{lastClaim.achievements}</p>
-            )}
-            {lastClaim.unlockedAchievements.length > 0 && (
-              <p className="text-[10px] text-neon-purple uppercase tracking-[0.08em]">
-                Открыто: {lastClaim.unlockedAchievements.join(" | ")}
-              </p>
-            )}
+          <div className="text-[9px] text-white/40 uppercase tracking-[0.08em] flex flex-wrap gap-x-2 gap-y-0.5">
+            <span className="text-neon-green font-bold">Получено: +{lastClaim.total}</span>
+            {lastClaim.bonus > 0 && <span>(активность +{lastClaim.bonus})</span>}
+            {lastClaim.streakMilestone > 0 && <span>(рубеж +{lastClaim.streakMilestone})</span>}
+            {lastClaim.weeklyActivity > 0 && <span>(неделя +{lastClaim.weeklyActivity})</span>}
           </div>
         )}
 
-        {error && <p className="mt-2 text-[10px] text-neon-pink uppercase tracking-[0.08em]">{error}</p>}
+        {error && <p className="text-[9px] text-neon-pink uppercase tracking-[0.08em]">{error}</p>}
 
+        {/* Кнопка получения */}
         <button
           type="button"
           onClick={handleClaim}
           disabled={isClaimed || loading}
           className={[
-            "mt-4 w-full rounded-2xl border-2 py-3.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all active:scale-[0.98]",
+            "w-full rounded-xl border py-2 text-[9px] font-black uppercase tracking-[0.2em] transition-all active:scale-[0.98]",
             isClaimed
-              ? "cursor-not-allowed border-neon-purple/30 bg-neon-purple/10 text-neon-purple/90 shadow-[0_0_16px_rgba(180,74,255,0.14)]"
-              : "border-neon-green/45 bg-neon-green/10 text-neon-green shadow-[0_0_20px_rgba(57,255,20,0.16)] hover:-translate-y-[1px] hover:border-neon-green/65 hover:bg-neon-green/15 hover:shadow-[0_0_26px_rgba(57,255,20,0.22)]",
+              ? "cursor-not-allowed border-white/5 bg-white/[0.02] text-white/30"
+              : "border-neon-green/45 bg-neon-green/10 text-neon-green shadow-[0_0_16px_rgba(57,255,20,0.1)] hover:border-neon-green/65 hover:bg-neon-green/15",
             loading ? "cursor-wait" : "",
           ].join(" ")}
         >
-          {loading ? "Начисляем..." : state.canClaim ? `Забрать +${state.rewardToday}` : "Уже получено"}
+          {loading ? "Начисляем..." : state.canClaim ? `Забрать +${state.rewardToday} ауры` : "Награда уже получена"}
         </button>
       </div>
     </section>

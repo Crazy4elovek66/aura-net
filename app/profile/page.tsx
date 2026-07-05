@@ -2,6 +2,7 @@ import AuraCard from "@/components/AuraCard";
 import AuraSpendActionsCard from "@/components/AuraSpendActionsCard";
 import Background from "@/components/Background";
 import DailyRewardCard from "@/components/DailyRewardCard";
+import QASection from "@/components/QASection";
 import { getDailyRewardStatus, getStreakRescueStatus } from "@/lib/economy";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -23,9 +24,6 @@ interface AuraEffectRow {
   expires_at: string;
 }
 
-interface ReferralStatusRow {
-  status: "pending" | "activated" | "rejected";
-}
 
 interface ProfilePageProps {
   searchParams: Promise<{
@@ -33,58 +31,7 @@ interface ProfilePageProps {
   }>;
 }
 
-function ProfileHubSummary({
-  auraPoints,
-  dailyStreak,
-  claimedToday,
-  activatedInvites,
-  pendingInvites,
-}: {
-  auraPoints: number;
-  dailyStreak: number;
-  claimedToday: boolean;
-  activatedInvites: number;
-  pendingInvites: number;
-}) {
-  return (
-    <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-black/30 p-5 backdrop-blur-md">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.18em] text-white/72">Быстрый срез</h2>
-          <p className="mt-1 text-[11px] text-white/52">
-            Твой статус, награда дня и следующий шаг в одном месте.
-          </p>
-        </div>
-        <div className="rounded-2xl border border-neon-purple/30 bg-neon-purple/10 px-3 py-2 text-right">
-          <p className="text-[9px] uppercase tracking-[0.1em] text-white/45">Баланс</p>
-          <p className="text-sm font-black text-neon-purple">{auraPoints}</p>
-        </div>
-      </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-        <Link href="/profile?tab=profile#daily-reward-card" className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-          <p className="text-[9px] font-black uppercase tracking-[0.1em] text-white/50">Награда дня</p>
-          <p className="mt-1 text-[12px] font-black text-white">
-            {claimedToday ? "Награда уже забрана" : "Доступна награда"}
-          </p>
-          <p className="mt-1 text-[10px] text-white/52">Серия: {dailyStreak} дн.</p>
-        </Link>
-        <Link href="/profile?tab=progress" className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-          <p className="text-[9px] font-black uppercase tracking-[0.1em] text-white/50">Маршрут</p>
-          <p className="mt-1 text-[12px] font-black text-white">Цель, ранг и динамика</p>
-          <p className="mt-1 text-[10px] text-white/52">Что делать дальше</p>
-        </Link>
-        <Link href="/profile?tab=circle" className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-          <p className="text-[9px] font-black uppercase tracking-[0.1em] text-white/50">Круг</p>
-          <p className="mt-1 text-[12px] font-black text-white">
-            {activatedInvites > 0 ? `${activatedInvites} актив.` : "Отправь первый инвайт"}
-          </p>
-          <p className="mt-1 text-[10px] text-white/52">В ожидании: {pendingInvites}</p>
-        </Link>
-      </div>
-    </section>
-  );
-}
 
 export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   const params = await searchParams;
@@ -190,7 +137,6 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
     votesDownResult,
     adminCheckResult,
     weeklyRewardDaysResult,
-    referralsStatusResult,
   ] = await Promise.all([
     supabase
       .from("boosts")
@@ -223,7 +169,6 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
       .eq("type", "daily_reward")
       .gte("created_at", weekStart.toISOString())
       .lt("created_at", weekEnd.toISOString()),
-    supabase.from("referrals").select("status").eq("inviter_id", user.id).limit(24),
   ]);
 
   const activeEffects = (auraEffectsResult.data as AuraEffectRow[] | null) || [];
@@ -236,10 +181,6 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   const weeklyRewardDays = new Set(
     (weeklyRewardDaysResult.data || []).map((row) => new Date(row.created_at).toISOString().slice(0, 10)),
   ).size;
-
-  const referralStatuses = (referralsStatusResult.data as ReferralStatusRow[] | null) || [];
-  const pendingInvites = referralStatuses.filter((entry) => entry.status === "pending").length;
-  const activatedInvites = referralStatuses.filter((entry) => entry.status === "activated").length;
 
   const profilePanel = (
     <>
@@ -274,12 +215,12 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           weeklyTargetDays: 5,
         }}
       />
-      <ProfileHubSummary
-        auraPoints={profile.aura_points}
-        dailyStreak={profile.daily_streak}
-        claimedToday={dailyRewardState.claimedToday}
-        activatedInvites={activatedInvites}
-        pendingInvites={pendingInvites}
+      <QASection
+        mode="answers-only"
+        username={profile.username}
+        profileId={profile.id}
+        isLoggedIn={true}
+        isAdmin={canManageSpecialCard}
       />
     </>
   );
