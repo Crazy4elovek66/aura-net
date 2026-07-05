@@ -1,4 +1,5 @@
-﻿import AuraCard from "@/components/AuraCard";
+import AuraCard from "@/components/AuraCard";
+import QASection from "@/components/QASection";
 import Background from "@/components/Background";
 import { VOTE_PAIR_COOLDOWN_HOURS } from "@/lib/economy";
 import { getProfileModerationState, isProfileLimited } from "@/lib/server/profile-moderation";
@@ -141,6 +142,14 @@ export default async function CheckPage({ params, searchParams }: CheckPageProps
             decayShieldUntil={decayShieldUntil}
             cardAccent={activeCardAccent?.effect_variant ?? null}
             cardAccentUntil={activeCardAccent?.expires_at ?? null}
+          />
+
+          <QASection
+            mode="public"
+            username={profile.username}
+            profileId={profile.id}
+            isLoggedIn={isAuthorizedUser}
+            isAdmin={canManageSpecialCard}
           />
         </main>
       </div>

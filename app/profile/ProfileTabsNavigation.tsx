@@ -15,11 +15,15 @@ import ShareableMomentsCard from "@/components/ShareableMomentsCard";
 import CopyLink from "./CopyLink";
 import { normalizeProfileTab, PROFILE_TAB_ITEMS, type ProfileTabKey } from "./profile-tabs";
 import type { CircleTabPayload, HistoryTabPayload, ProgressTabPayload } from "./profile-tab-data";
+import QASection from "@/components/QASection";
 
 interface ProfileTabsNavigationProps {
   initialTab: ProfileTabKey;
   profilePanel: ReactNode;
   shopPanel: ReactNode;
+  username: string;
+  profileId: string;
+  isAdmin: boolean;
 }
 
 interface SwipePoint {
@@ -93,7 +97,14 @@ function HeavyTabError({ errorText, onRetry }: { errorText?: string; onRetry: ()
   );
 }
 
-export default function ProfileTabsNavigation({ initialTab, profilePanel, shopPanel }: ProfileTabsNavigationProps) {
+export default function ProfileTabsNavigation({
+  initialTab,
+  profilePanel,
+  shopPanel,
+  username,
+  profileId,
+  isAdmin,
+}: ProfileTabsNavigationProps) {
   const [activeTab, setActiveTab] = useState<ProfileTabKey>(initialTab);
   const [touchEnabled, setTouchEnabled] = useState(false);
   const [payloads, setPayloads] = useState<Partial<HeavyTabPayloadMap>>({});
@@ -292,6 +303,18 @@ export default function ProfileTabsNavigation({ initialTab, profilePanel, shopPa
       return shopPanel;
     }
 
+    if (activeTab === "qa") {
+      return (
+        <QASection
+          mode="owner"
+          username={username}
+          profileId={profileId}
+          isLoggedIn={true}
+          isAdmin={isAdmin}
+        />
+      );
+    }
+
     if (!isHeavyTab(activeTab)) {
       return null;
     }
@@ -385,7 +408,7 @@ export default function ProfileTabsNavigation({ initialTab, profilePanel, shopPa
         <AuraTransactions transactions={historyPayload.transactions} />
       </>
     );
-  }, [activeTab, ensureTabPayload, errorMap, loadingMap, payloads, profilePanel, shopPanel]);
+  }, [activeTab, ensureTabPayload, errorMap, loadingMap, payloads, profilePanel, shopPanel, username, profileId, isAdmin]);
 
   return (
     <section className="w-full max-w-xl">

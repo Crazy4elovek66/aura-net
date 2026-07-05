@@ -23,6 +23,9 @@ export const CARD_ACCENT_DURATION_HOURS = 24;
 export const CARD_ACCENT_VARIANTS = ["NEON_EDGE", "GOLD_PULSE", "FROST_RING"] as const;
 export type CardAccentVariant = (typeof CARD_ACCENT_VARIANTS)[number];
 
+export const ANONYMOUS_QUESTION_COST = 15;
+export const QA_ANSWER_LIKE_REWARD = 1;
+
 export const DAILY_REWARD_BASE = 8;
 export const DAILY_REWARD_STEP = 2;
 export const DAILY_REWARD_CAP = 18;

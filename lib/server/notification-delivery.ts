@@ -57,7 +57,7 @@ function buildOpenLink(username?: string | null) {
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXT_PUBLIC_PUBLIC_APP_URL ||
-    "";
+    "https://aura-net-taupe.vercel.app";
 
   if (!appUrl) return null;
 
@@ -65,7 +65,13 @@ function buildOpenLink(username?: string | null) {
   return username ? `${normalized}/check/${username}` : `${normalized}/profile`;
 }
 
-function formatEventMessage(event: NotificationQueueRow, profile: ProfileRow) {
+interface FormattedEventMessage {
+  text: string;
+  buttonUrl?: string | null;
+  buttonText?: string;
+}
+
+function formatEventMessage(event: NotificationQueueRow, profile: ProfileRow): FormattedEventMessage {
   const payload = event.payload || {};
   const openLink = buildOpenLink(profile.username);
 
@@ -75,73 +81,129 @@ function formatEventMessage(event: NotificationQueueRow, profile: ProfileRow) {
     const voter = asString(payload.voterDisplayName) || asString(payload.voterUsername);
     const sourceText = Boolean(payload.anonymous) ? "Анонимно." : voter ? `От ${voter}.` : "";
     const actionText =
-      voteType === "down" ? "Тебе прилетел новый минус-голос." : "Тебе прилетел новый плюс-голос.";
+      voteType === "down" ? "Тебе прилетел новый минус-голос в Aura." : "Тебе прилетел новый плюс-голос в Aura.";
 
-    return [
-      actionText,
-      `Изменение ауры: ${auraChange >= 0 ? `+${auraChange}` : auraChange}.`,
-      sourceText,
-      openLink ? `Открыть профиль: ${openLink}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+    return {
+      text: [
+        actionText,
+        `Изменение ауры: ${auraChange >= 0 ? `+${auraChange}` : auraChange}.`,
+        sourceText,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      buttonUrl: openLink,
+      buttonText: "Открыть профиль",
+    };
   }
 
   if (event.event_type === "streak_reminder") {
     const streak = asNumber(payload.streak) ?? 0;
     const availableAt = asString(payload.availableAt);
-    return [
-      `Серия держится уже ${streak} дн.`,
-      availableAt ? `Следующее окно daily reward откроется ${new Date(availableAt).toLocaleString("ru-RU")}.` : "",
-      openLink ? `Забрать награду: ${openLink}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+    return {
+      text: [
+        `Серия держится уже ${streak} дн. в Aura.`,
+        availableAt ? `Следующее окно daily reward откроется ${new Date(availableAt).toLocaleString("ru-RU")}.` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      buttonUrl: openLink,
+      buttonText: "Забрать награду",
+    };
   }
 
   if (event.event_type === "leaderboard_top10_entered") {
     const rank = asNumber(payload.rank);
-    return [
-      "Ты ворвался в топ-10.",
-      rank ? `Текущая позиция: #${rank}.` : "",
-      openLink ? `Проверить рейтинг: ${openLink}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+    return {
+      text: [
+        "Ты ворвался в топ-10 в Aura.",
+        rank ? `Текущая позиция: #${rank}.` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      buttonUrl: openLink,
+      buttonText: "Проверить рейтинг",
+    };
   }
 
   if (event.event_type === "leaderboard_top10_dropped") {
     const rank = asNumber(payload.rank);
-    return [
-      "Ты вылетел из топ-10.",
-      rank ? `Сейчас ты на позиции #${rank}.` : "",
-      openLink ? `Вернуться в гонку: ${openLink}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+    return {
+      text: [
+        "Ты вылетел из топ-10 в Aura.",
+        rank ? `Сейчас ты на позиции #${rank}.` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      buttonUrl: openLink,
+      buttonText: "Вернуться в гонку",
+    };
   }
 
   if (event.event_type === "weekly_title_awarded") {
-    const title = asString(payload.title) || "Новый тайтл недели";
-    return [title, openLink ? `Посмотреть профиль: ${openLink}` : ""].filter(Boolean).join("\n");
+    const title = asString(payload.title) || "Новый тайтл недели в Aura";
+    return {
+      text: title,
+      buttonUrl: openLink,
+      buttonText: "Посмотреть профиль",
+    };
   }
 
   if (event.event_type === "tier_reached") {
     const tierLabel = asString(payload.tierLabel) || "Новый уровень";
     const threshold = asNumber(payload.threshold);
-    return [
-      `Ты поднялся до уровня «${tierLabel}».`,
-      threshold ? `Порог: ${threshold} ауры.` : "",
-      openLink ? `Открыть профиль: ${openLink}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+    return {
+      text: [
+        `Ты поднялся до уровня «${tierLabel}» в Aura.`,
+        threshold ? `Порог: ${threshold} ауры.` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      buttonUrl: openLink,
+      buttonText: "Открыть профиль",
+    };
   }
 
-  return ["У тебя новое событие в Aura.net.", openLink ? `Открыть: ${openLink}` : ""].filter(Boolean).join("\n");
+  if (event.event_type === "new_question") {
+    const isAnonymous = Boolean(payload.isAnonymous);
+    const sender = asString(payload.senderUsername);
+    const sourceText = isAnonymous ? "Анонимно." : sender ? `От @${sender}.` : "";
+    const profileLink = buildOpenLink(null); // Ссылка без username ведет на свой профиль
+    const openLinkForQuestion = profileLink ? `${profileLink}?tab=qa` : null;
+    return {
+      text: [
+        "Для тебя новый вопрос в Aura!",
+        sourceText,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      buttonUrl: openLinkForQuestion,
+      buttonText: "Ответить",
+    };
+  }
+
+  if (event.event_type === "new_answer") {
+    const replier = asString(payload.replierUsername) || "";
+    const openLinkForAnswer = buildOpenLink(replier);
+    return {
+      text: replier ? `Пользователь @${replier} ответил на твой вопрос в Aura!` : "На твой вопрос опубликовали ответ в Aura!",
+      buttonUrl: openLinkForAnswer,
+      buttonText: "Посмотреть ответ",
+    };
+  }
+
+  return {
+    text: "Для тебя новое событие в Aura.",
+    buttonUrl: openLink,
+    buttonText: "Открыть",
+  };
 }
 
-async function sendTelegramMessage(chatId: number, text: string): Promise<TelegramDeliveryResult> {
+async function sendTelegramMessage(
+  chatId: number,
+  text: string,
+  buttonUrl?: string | null,
+  buttonText?: string,
+): Promise<TelegramDeliveryResult> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) {
     return {
@@ -160,6 +222,27 @@ async function sendTelegramMessage(chatId: number, text: string): Promise<Telegr
         chat_id: chatId,
         text,
         disable_web_page_preview: true,
+        ...(buttonUrl
+          ? {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    buttonUrl.startsWith("https://") && !buttonUrl.includes("t.me/")
+                      ? {
+                          text: buttonText || "Открыть",
+                          web_app: {
+                            url: buttonUrl,
+                          },
+                        }
+                      : {
+                          text: buttonText || "Открыть",
+                          url: buttonUrl,
+                        },
+                  ],
+                ],
+              },
+            }
+          : {}),
       }),
       signal: AbortSignal.timeout(12_000),
     });
@@ -341,8 +424,13 @@ export async function drainPendingNotificationQueue(limit = 8): Promise<Notifica
       continue;
     }
 
-    const message = formatEventMessage(event, profile);
-    const result = await sendTelegramMessage(profile.telegram_id, message);
+    const formatted = formatEventMessage(event, profile);
+    const result = await sendTelegramMessage(
+      profile.telegram_id,
+      formatted.text,
+      formatted.buttonUrl,
+      formatted.buttonText,
+    );
 
     if (result.ok) {
       sent += 1;

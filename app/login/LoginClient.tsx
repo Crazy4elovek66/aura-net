@@ -80,7 +80,20 @@ export default function LoginClient({
       .eq("id", userId)
       .maybeSingle();
 
-    return !profile || profile.is_nickname_selected === false ? "/setup-profile" : "/profile";
+    if (!profile || profile.is_nickname_selected === false) {
+      return "/setup-profile";
+    }
+
+    const tg = (window as Window & { Telegram?: { WebApp?: { initDataUnsafe?: { start_param?: string } } } }).Telegram?.WebApp;
+    const startParam = tg?.initDataUnsafe?.start_param;
+    if (startParam && startParam.startsWith("ask_")) {
+      const target = startParam.slice(4);
+      if (target) {
+        return `/check/${target}?ask=true`;
+      }
+    }
+
+    return "/profile";
   }, []);
 
   const syncTelegramProfile = useCallback(async (userId: string, profile?: TelegramProfileInput) => {

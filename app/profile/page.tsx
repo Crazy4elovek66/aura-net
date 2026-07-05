@@ -313,13 +313,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             href="/leaderboard"
             className="px-3 py-2 rounded-lg border border-card-border hover:border-neon-purple transition-all text-xs sm:text-sm font-medium text-white/70 hover:text-white"
           >
-            Гонка ауры
-          </Link>
-          <Link
-            href="/discover"
-            className="px-3 py-2 rounded-lg border border-card-border hover:border-neon-purple transition-all text-xs sm:text-sm font-medium text-white/70 hover:text-white"
-          >
-            Разведка
+            Топы ауры
           </Link>
           <Link
             href="/profile"
@@ -354,7 +348,14 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
         </header>
 
         <main className="flex flex-col items-center gap-6 pb-12">
-          <ProfileTabsNavigation initialTab={activeTab} profilePanel={profilePanel} shopPanel={shopPanel} />
+          <ProfileTabsNavigation
+            initialTab={activeTab}
+            profilePanel={profilePanel}
+            shopPanel={shopPanel}
+            username={profile.username}
+            profileId={profile.id}
+            isAdmin={canManageSpecialCard}
+          />
         </main>
       </div>
     </div>

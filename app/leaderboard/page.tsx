@@ -1,4 +1,4 @@
-﻿import Background from "@/components/Background";
+import Background from "@/components/Background";
 import LeaderboardHub from "@/components/LeaderboardHub";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
@@ -23,13 +23,7 @@ export default async function LeaderboardPage() {
             href="/leaderboard"
             className="px-3 py-2 rounded-lg border border-card-border hover:border-neon-purple transition-all text-xs sm:text-sm font-medium text-white/70 hover:text-white"
           >
-            Гонка ауры
-          </Link>
-          <Link
-            href="/discover"
-            className="px-3 py-2 rounded-lg border border-card-border hover:border-neon-purple transition-all text-xs sm:text-sm font-medium text-white/70 hover:text-white"
-          >
-            Разведка
+            Топы ауры
           </Link>
           <Link
             href={user ? "/profile" : "/login"}

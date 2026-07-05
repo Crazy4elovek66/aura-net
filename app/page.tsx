@@ -368,13 +368,7 @@ function LandingContent({
             href="/leaderboard"
             className="px-3 py-2 rounded-lg border border-card-border hover:border-neon-purple transition-all text-xs sm:text-sm font-medium text-white/70 hover:text-white"
           >
-            Гонка ауры
-          </Link>
-          <Link
-            href="/discover"
-            className="px-3 py-2 rounded-lg border border-card-border hover:border-neon-purple transition-all text-xs sm:text-sm font-medium text-white/70 hover:text-white"
-          >
-            Разведка
+            Топы ауры
           </Link>
           {user ? (
             <Link
