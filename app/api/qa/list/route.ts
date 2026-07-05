@@ -33,7 +33,7 @@ interface QuestionDbRow {
   created_at: string;
   sender_id: string | null;
   profiles: ProfileResponse | null;
-  qa_answers: AnswerResponse[];
+  qa_answers: AnswerResponse[] | AnswerResponse | null;
 }
 
 export async function GET(request: Request) {
@@ -135,7 +135,15 @@ export async function GET(request: Request) {
   // Форматируем данные для отправки клиенту
   const formattedQuestions = dbRows.map((q) => {
     const showSender = !q.is_anonymous || isAdmin;
-    const answer = q.qa_answers?.[0] || null;
+    
+    let answer: AnswerResponse | null = null;
+    if (q.qa_answers) {
+      if (Array.isArray(q.qa_answers)) {
+        answer = q.qa_answers[0] || null;
+      } else {
+        answer = q.qa_answers as AnswerResponse;
+      }
+    }
 
     let formattedAnswer = null;
     if (answer) {
