@@ -393,48 +393,15 @@ export default function QASection({ mode, username, profileId, isLoggedIn, isAdm
                     )}
                   </div>
 
-                  {answeringId === q.id ? (
-                    <div className="flex flex-col gap-3">
-                      <textarea
-                        value={answerText}
-                        onChange={(e) => setAnswerText(e.target.value)}
-                        placeholder="Напиши свой глубокий, ироничный или честный ответ..."
-                        maxLength={4000}
-                        rows={3}
-                        className="w-full rounded-2xl border border-neon-purple/40 bg-black/50 p-4 text-xs text-white focus:outline-none focus:ring-1 focus:ring-neon-purple"
-                      />
-                      <div className="flex justify-between items-center">
-                        <span className="text-[9px] text-white/40">
-                          {answerText.length}/4000
-                        </span>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setAnsweringId(null)}
-                            className="px-3 py-1.5 rounded-xl border border-white/10 hover:border-white/20 text-[10px] font-black uppercase tracking-wider text-white/60 hover:text-white"
-                          >
-                            Отмена
-                          </button>
-                          <button
-                            onClick={() => handleAnswer(q.id)}
-                            disabled={submitting || !answerText.trim()}
-                            className="px-4 py-1.5 rounded-xl bg-neon-purple/20 border border-neon-purple/40 text-neon-purple hover:bg-neon-purple/30 text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-50"
-                          >
-                            {submitting ? "Публикация..." : "Ответить"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setAnsweringId(q.id);
-                        setAnswerText("");
-                      }}
-                      className="w-full py-2.5 rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] text-[10px] font-black uppercase tracking-wider text-white/80 hover:text-white transition-all text-center"
-                    >
-                      Написать ответ
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      setAnsweringId(q.id);
+                      setAnswerText("");
+                    }}
+                    className="w-full py-2.5 rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] text-[10px] font-black uppercase tracking-wider text-white/80 hover:text-white transition-all text-center"
+                  >
+                    Написать ответ
+                  </button>
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -470,7 +437,7 @@ export default function QASection({ mode, username, profileId, isLoggedIn, isAdm
                     placeholder="Спроси что-нибудь анонимно или открыто..."
                     maxLength={1000}
                     rows={3}
-                    className="w-full rounded-2xl border border-white/10 bg-black/40 p-4 text-xs text-white placeholder-white/30 focus:border-neon-purple focus:outline-none"
+                    className="w-full rounded-2xl border border-white/10 bg-black/40 p-4 text-base text-white placeholder-white/30 focus:border-neon-purple focus:outline-none placeholder:text-xs"
                   />
 
                   <div className="flex flex-wrap items-center justify-between gap-4">
@@ -595,6 +562,91 @@ export default function QASection({ mode, username, profileId, isLoggedIn, isAdm
           </div>
         </div>
       )}
+
+      {/* Модальное окно (Bottom Sheet / Popup) для комфортного ответа на мобильных устройствах */}
+      <AnimatePresence>
+        {answeringId && (
+          <div className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
+            {/* Закрытие при клике по фону */}
+            <div className="absolute inset-0" onClick={() => setAnsweringId(null)} />
+
+            <motion.div
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 250 }}
+              className="relative w-full max-w-lg bg-[#0c0c0e] border-t sm:border border-white/10 rounded-t-[32px] sm:rounded-[32px] p-6 flex flex-col gap-4 shadow-[0_-10px_40px_rgba(0,0,0,0.8)] z-[301]"
+            >
+              {/* Полоска-гриппер для мобильных */}
+              <div className="w-12 h-1 bg-white/20 rounded-full mx-auto sm:hidden mb-2" />
+
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black uppercase tracking-wider text-neon-purple">
+                  Ответ на вопрос
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setAnsweringId(null)}
+                  className="text-white/40 hover:text-white text-xs font-medium"
+                >
+                  Закрыть
+                </button>
+              </div>
+
+              {/* Отображение самого вопроса */}
+              {(() => {
+                const activeQuestion =
+                  inbox.find((q) => q.id === answeringId) ||
+                  questions.find((q) => q.id === answeringId);
+                return activeQuestion ? (
+                  <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+                    <p className="text-[8px] text-white/40 uppercase tracking-widest font-black mb-1">Вопрос:</p>
+                    <p className="text-sm font-medium text-white/90 leading-relaxed">{activeQuestion.text}</p>
+                    <p className="mt-1 text-[8px] text-white/30 uppercase tracking-widest">
+                      {activeQuestion.isAnonymous ? "Анонимно" : activeQuestion.sender ? `@${activeQuestion.sender.username}` : "Открыто"}
+                    </p>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Поле ввода ответа (шрифт 16px полностью блокирует зум в iOS) */}
+              <div className="flex flex-col gap-2">
+                <textarea
+                  value={answerText}
+                  onChange={(e) => setAnswerText(e.target.value)}
+                  placeholder="Напиши свой глубокий, ироничный или честный ответ..."
+                  maxLength={4000}
+                  rows={5}
+                  autoFocus
+                  className="w-full rounded-2xl border border-white/10 bg-black/40 p-4 text-base text-white focus:border-neon-purple focus:outline-none focus:ring-1 focus:ring-neon-purple placeholder-white/35 placeholder:text-xs"
+                />
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-[10px] text-white/40 font-bold">
+                    {answerText.length}/4000
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAnsweringId(null)}
+                      className="px-4 py-2 rounded-xl border border-white/10 hover:border-white/20 text-xs font-black uppercase tracking-wider text-white/70 hover:text-white transition-all active:scale-95"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAnswer(answeringId)}
+                      disabled={submitting || !answerText.trim()}
+                      className="px-5 py-2 rounded-xl bg-neon-purple text-white shadow-[0_0_16px_rgba(180,74,255,0.25)] hover:shadow-[0_0_24px_rgba(180,74,255,0.4)] text-xs font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 disabled:shadow-none disabled:scale-100"
+                    >
+                      {submitting ? "Публикация..." : "Ответить"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
