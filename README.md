@@ -1,5 +1,8 @@
 # Aura.net
 
+![CI](https://github.com/Crazy4elovek66/aura-net/actions/workflows/ci.yml/badge.svg)
+
+
 Aura.net это Next 16 + Supabase проект социальной статусной игры с профилями, aura economy, голосами, daily/streak-циклами, leaderboard, discover, achievements, spend-actions, notifications, referrals и special-card состояниями.
 
 В репозитории уже есть минимальный слой для public-launch ops:

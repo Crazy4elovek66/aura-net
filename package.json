@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:smoke": "node --experimental-strip-types --test tests/smoke/*.test.mjs",
+    "test": "npm run test:smoke",
     "typecheck": "tsc --noEmit",
     "qa:smoke:manual": "node scripts/manual-qa-smoke.mjs",
     "prelaunch:check": "node scripts/prelaunch-check.mjs"
